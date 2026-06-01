@@ -1,0 +1,211 @@
+codex --approval-mode auto-edit "
+Implementa la generación automática y correcta de dieciseisavos proyectados del Mundial 2026 a partir de las apuestas de fase de grupos de cada usuario.
+
+Contexto:
+La app es una porra del Mundial 2026 en Streamlit con PostgreSQL.
+La base ya existe y NO debe modificarse.
+Ya existen:
+- players
+- teams
+- matches
+- predictions
+- app_settings
+- pages/01_Apuestas.py
+
+La tabla matches contiene:
+- 72 partidos de fase de grupos con stage='group'
+- 16 placeholders de dieciseisavos con stage='round_of_32' y match_number 73 a 88
+
+Archivos que ya existirán antes de ejecutar este prompt:
+- data/third_place_assignment_2026.json
+Este archivo contiene las 495 combinaciones oficiales de asignación de terceros.
+Debe tener esta estructura:
+{
+  \"_metadata\": {...},
+  \"assignments\": {
+    \"ABCDEFGH\": {
+      \"1A\": \"3H\",
+      \"1B\": \"3G\",
+      \"1D\": \"3B\",
+      \"1E\": \"3C\",
+      \"1G\": \"3A\",
+      \"1I\": \"3F\",
+      \"1K\": \"3D\",
+      \"1L\": \"3E\"
+    }
+  }
+}
+
+IMPORTANTE:
+- No modificar el schema de base de datos.
+- No borrar datos.
+- No hacer DROP.
+- No cambiar reglas de scoring existentes.
+- No modificar los matches globales 73-88 con equipos concretos, porque el bracket proyectado depende de cada usuario.
+- La lógica debe ser por usuario.
+- No inventar asignaciones de terceros: usar exclusivamente data/third_place_assignment_2026.json.
+- Si falta el JSON o no contiene 495 combinaciones, mostrar error claro y no generar cruces incompletos.
+
+Objetivo:
+Cuando un usuario haya apostado los 72 partidos de fase de grupos, la app debe calcular automáticamente:
+1. La clasificación proyectada de cada grupo.
+2. Los 8 mejores terceros proyectados.
+3. La clave de terceros, por ejemplo ABCDEFGH.
+4. Los cruces de dieciseisavos usando data/third_place_assignment_2026.json.
+5. Permitir apostar marcador y equipo que avanza en esos cruces proyectados.
+
+Crear:
+- bracket.py
+- tests/test_bracket.py si el proyecto ya usa pytest o si es fácil añadirlo.
+- Opcionalmente utils/bracket_ui.py si ayuda a mantener limpia la UI.
+
+En bracket.py implementar funciones puras:
+
+1. load_third_place_assignment_map(path='data/third_place_assignment_2026.json')
+   - Carga el JSON.
+   - Soporta tanto formato con raíz 'assignments' como formato plano.
+   - Valida que contiene 495 combinaciones.
+   - Valida que cada combinación tiene slots:
+     1A, 1B, 1D, 1E, 1G, 1I, 1K, 1L.
+   - Si falla, devolver error controlado o lanzar ValueError con mensaje claro.
+
+2. get_player_group_predictions(session, player_id)
+   - Lee predictions del usuario para matches stage='group'.
+   - Debe devolver apuestas con:
+     match_id
+     match_number
+     group_letter
+     home_team_id
+     home_team_name
+     away_team_id
+     away_team_name
+     predicted_home_score
+     predicted_away_score
+   - Solo considerar partidos con ambos equipos definidos.
+
+3. calculate_projected_group_tables(group_predictions)
+   - Calcula tabla por grupo con:
+     team_id
+     team_name
+     group_letter
+     played
+     won
+     drawn
+     lost
+     goals_for
+     goals_against
+     goal_difference
+     points
+   - Victoria = 3 puntos.
+   - Empate = 1 punto.
+   - Derrota = 0 puntos.
+
+4. rank_group_table(table)
+   - Ordenar por:
+     points DESC
+     goal_difference DESC
+     goals_for DESC
+     team_name ASC como fallback determinista.
+   - Añadir position 1, 2, 3, 4.
+   - Añadir campo tie_break_note si se usó fallback alfabético.
+
+5. calculate_best_third_placed(projected_tables)
+   - Tomar el 3º de cada grupo A-L.
+   - Ordenar por:
+     points DESC
+     goal_difference DESC
+     goals_for DESC
+     group_letter ASC como fallback determinista.
+   - Seleccionar los 8 mejores.
+   - Devolver:
+     selected_thirds
+     third_place_key, por ejemplo 'ABCDEFGH', con letras ordenadas alfabéticamente.
+
+6. resolve_third_place_slots(third_place_key, assignment_map)
+   - Buscar third_place_key en assignment_map.
+   - Si no existe, devolver error controlado:
+     'No se encontró la combinación oficial de terceros para la clave {third_place_key}.'
+   - No generar cruces inventados.
+
+7. build_projected_round_of_32_matches(projected_tables, third_assignment)
+   - Generar los 16 cruces:
+     Match 73: 2A vs 2B
+     Match 74: 1E vs tercer asignado para 1E
+     Match 75: 1F vs 2C
+     Match 76: 1C vs 2F
+     Match 77: 1I vs tercer asignado para 1I
+     Match 78: 2E vs 2I
+     Match 79: 1A vs tercer asignado para 1A
+     Match 80: 1L vs tercer asignado para 1L
+     Match 81: 1D vs tercer asignado para 1D
+     Match 82: 1G vs tercer asignado para 1G
+     Match 83: 2K vs 2L
+     Match 84: 1H vs 2J
+     Match 85: 1B vs tercer asignado para 1B
+     Match 86: 1J vs 2H
+     Match 87: 1K vs tercer asignado para 1K
+     Match 88: 2D vs 2G
+   - Devolver lista con:
+     match_number
+     home_slot
+     away_slot
+     home_team_id
+     home_team_name
+     away_team_id
+     away_team_name
+
+8. get_projected_bracket_for_player(session, player_id)
+   - Orquestar todo.
+   - Si faltan apuestas de grupo:
+     devolver completed=False, progress X/72.
+   - Si está completo:
+     devolver completed=True, projected_tables, selected_thirds, third_place_key, round_of_32_matches.
+   - Si falla el JSON:
+     devolver completed=False con error claro.
+
+Modificar pages/01_Apuestas.py:
+- Añadir sección:
+  'Dieciseisavos proyectados según tus apuestas de grupos'
+- Si faltan apuestas:
+  mostrar progreso X/72 y aviso.
+- Si están completas:
+  mostrar:
+  1. tablas proyectadas de grupos
+  2. mejores terceros
+  3. clave de terceros
+  4. cruces proyectados de dieciseisavos
+- Usar team_label o banderas si existe utils/flags.py.
+- Indicar claramente:
+  'Estos cruces son una proyección basada en tus apuestas, no el cuadro oficial real.'
+- Para partidos 73-88:
+  - Permitir guardar prediction usando match_id existente.
+  - Mostrar equipos proyectados en UI.
+  - El marcador se guarda en predictions normalmente.
+  - predicted_advancing_team_id debe ser selector entre los dos equipos proyectados.
+  - No actualizar home_team_id ni away_team_id en matches para esos placeholders.
+- Si el usuario cambia sus apuestas de grupo, los cruces proyectados pueden cambiar.
+  Mostrar warning:
+  'Si modificas tus apuestas de grupo, tus cruces proyectados pueden cambiar. Revisa tus apuestas de eliminatorias.'
+- Si ya hay una apuesta de dieciseisavos guardada y predicted_advancing_team_id no coincide con los equipos actuales del cruce, mostrar warning.
+
+Tests:
+Crear tests/test_bracket.py con:
+- cálculo de tabla de grupo.
+- orden por puntos, diferencia y goles.
+- cálculo de mejores terceros.
+- carga de JSON y validación de 495 combinaciones.
+- generación de cruces con una combinación conocida.
+- error controlado si falta third_place_key.
+
+README:
+Añadir sección:
+'Dieciseisavos proyectados'
+Explicar:
+- Se calculan por usuario desde sus apuestas de grupos.
+- Los 8 mejores terceros usan ranking por puntos, diferencia y goles.
+- La asignación de terceros depende de data/third_place_assignment_2026.json.
+- La app nunca inventa cruces si falta una combinación.
+
+No ejecutar comandos destructivos.
+No modificar schema.
+"

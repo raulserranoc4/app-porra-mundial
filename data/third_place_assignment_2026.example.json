@@ -1,0 +1,19 @@
+{
+  "_metadata": {
+    "source": "example only",
+    "combination_count": 1,
+    "note": "This file is only an example. Generate the real file with scripts/generate_third_place_assignment_2026.py"
+  },
+  "assignments": {
+    "ABCDEFGH": {
+      "1A": "3H",
+      "1B": "3G",
+      "1D": "3B",
+      "1E": "3C",
+      "1G": "3A",
+      "1I": "3F",
+      "1K": "3D",
+      "1L": "3E"
+    }
+  }
+}
