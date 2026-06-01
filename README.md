@@ -384,6 +384,35 @@ streamlit run app.py
 
 La misma base de código funciona en desarrollo local y producción.
 
+## Despliegue en Streamlit Community Cloud
+
+El repositorio incluye `app.py` como entrypoint y `requirements.txt` con las
+dependencias fijadas para que el despliegue sea reproducible.
+
+1. Sube el repositorio a GitHub.
+2. En Streamlit Community Cloud crea una app con la rama deseada y el entrypoint
+   `app.py`.
+3. En `Advanced settings`, selecciona Python `3.12`.
+4. Pega los secretos en formato TOML. Como mínimo, configura `DATABASE_URL`:
+
+```toml
+DATABASE_URL = "postgresql://usuario:password@host:5432/postgres"
+APP_ENV = "production"
+APP_TIMEZONE = "Europe/Madrid"
+GLOBAL_PREDICTIONS_LOCK_AT = "2026-06-11T00:00:00+02:00"
+FOOTBALL_PROVIDER = "manual"
+API_FOOTBALL_KEY = ""
+API_FOOTBALL_BASE_URL = "https://v3.football.api-sports.io"
+ADMIN_EMAILS = "admin@example.com"
+PASSWORD_HASH_SCHEME = "bcrypt"
+REQUIRE_INVITE_CODE = "true"
+DEFAULT_INVITE_CODE = "cambia-este-codigo"
+```
+
+No subas `.env` ni `.streamlit/secrets.toml` a Git. Community Cloud expone los
+secretos de nivel raíz como variables de entorno, que es el formato consumido
+por la aplicación.
+
 ## Tests
 
 Ejecuta la suite:
