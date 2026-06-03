@@ -2,6 +2,8 @@ import json
 import unittest
 from unittest.mock import patch
 
+import pandas as pd
+
 from scoring import (
     _calculate_projected_tables_for_scoring,
     _completed_group_letters,
@@ -9,6 +11,7 @@ from scoring import (
     calculate_group_prediction_points,
     calculate_match_prediction_points,
     calculate_special_prediction_points,
+    recalculate_all_scores,
 )
 
 
@@ -168,6 +171,15 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(points, 25)
         self.assertTrue(details["top_scorer_correct"])
         self.assertTrue(details["mvp_correct"])
+
+    def test_recalculate_all_scores_tolerates_incomplete_tournament(self):
+        with patch("scoring.fetch_df", return_value=pd.DataFrame(columns=["id"])):
+            with patch("scoring.recalculate_group_scores") as groups:
+                with patch("scoring.recalculate_special_scores") as specials:
+                    recalculate_all_scores()
+
+        groups.assert_called_once()
+        specials.assert_called_once()
 
 
 if __name__ == "__main__":

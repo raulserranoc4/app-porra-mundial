@@ -7,6 +7,16 @@ from sqlalchemy import text
 from api_client import get_provider
 from auth import current_user
 from db import db_session, fetch_df, insert_dynamic, table_columns, update_dynamic
+from real_tournament import (
+    RealTournamentError,
+    get_tournament_diagnostics,
+    recalculate_real_group_standings,
+    update_real_knockout_next_rounds,
+    update_real_round_of_32_from_group_standings,
+    update_tournament_results_from_real_knockout,
+    validate_real_match_result,
+    winner_team_id_from_score,
+)
 from scoring import recalculate_all_scores, recalculate_group_scores, recalculate_match_scores, recalculate_special_scores
 from utils.payments import paid_status_label
 from utils.ui import inject_app_css
@@ -111,12 +121,47 @@ def update_player_paid_status(conn, player_id, paid: bool) -> None:
 
 
 def render_diagnostics() -> None:
-    st.subheader("Diagnostico")
+    st.subheader("Diagnostico de torneo")
     cols = st.columns(4)
     cols[0].metric("Jugadores", count_rows("players"))
     cols[1].metric("Partidos", count_rows("matches"))
     cols[2].metric("Apuestas", count_rows("predictions"))
     cols[3].metric("Score events", count_rows("score_events"))
+
+    try:
+        diagnostics = get_tournament_diagnostics()
+    except Exception as exc:
+        st.info(f"No se pudo cargar el diagnostico avanzado: {exc}")
+        return
+
+    group_finished = diagnostics["group_matches_finished"]
+    group_total = diagnostics["group_matches_total"]
+    st.progress(
+        group_finished / group_total if group_total else 0,
+        text=f"Partidos de grupo finalizados: {group_finished}/{group_total}",
+    )
+
+    round_labels = {
+        "round_of_32": "Dieciseisavos",
+        "round_of_16": "Octavos",
+        "quarter_final": "Cuartos",
+        "semi_final": "Semifinales",
+    }
+    round_cols = st.columns(4)
+    for index, (key, label) in enumerate(round_labels.items()):
+        data = diagnostics[key]
+        round_cols[index].metric(
+            label,
+            f"{data['defined']}/{data['total']} definidos",
+            f"{data['finished']}/{data['total']} finalizados",
+        )
+
+    final_data = diagnostics["final"]
+    status_cols = st.columns(4)
+    status_cols[0].metric("Final definida", "Si" if final_data["defined"] else "No")
+    status_cols[1].metric("Final finalizada", "Si" if final_data["finished"] else "No")
+    status_cols[2].metric("group_standings", "Si" if diagnostics["group_standings_updated"] else "No")
+    status_cols[3].metric("leaderboard", "Si" if diagnostics["leaderboard_generated"] else "No")
 
 
 def render_payments_tab() -> None:
@@ -310,35 +355,60 @@ def render_matches_tab(team_names: list[str], team_ids: dict) -> None:
         home_pen = penalty_cols[0].number_input("Penales local", min_value=0, max_value=30, value=int_or_zero(match.get("home_score_penalties")))
         away_pen = penalty_cols[1].number_input("Penales visitante", min_value=0, max_value=30, value=int_or_zero(match.get("away_score_penalties")))
 
-        result_cols = st.columns(2)
-        winner_name = result_cols[0].selectbox(
-            "Ganador",
-            team_names,
-            index=next((idx for idx, name in enumerate(team_names) if team_ids.get(name) == clean_value(match.get("winner_team_id"))), 0),
-        )
-        advancing_name = result_cols[1].selectbox(
-            "Equipo que avanza",
-            team_names,
-            index=next((idx for idx, name in enumerate(team_names) if team_ids.get(name) == clean_value(match.get("advancing_team_id"))), 0),
-        )
+        home_team_name = match.get("home_team") or "Local"
+        away_team_name = match.get("away_team") or "Visitante"
+        derived_winner_id = winner_team_id_from_score(match, int(home_score), int(away_score))
+        if derived_winner_id == match.get("home_team_id"):
+            st.caption(f"Ganador calculado automaticamente: {home_team_name}")
+        elif derived_winner_id == match.get("away_team_id"):
+            st.caption(f"Ganador calculado automaticamente: {away_team_name}")
+        else:
+            st.caption("Ganador calculado automaticamente: empate")
+
+        advancing_name = ""
+        if str(match.get("display_stage") or "").lower() != "group":
+            if int(home_score) > int(away_score):
+                advancing_options = [home_team_name]
+                st.caption(f"Equipo que avanza calculado automaticamente: {home_team_name}")
+            elif int(away_score) > int(home_score):
+                advancing_options = [away_team_name]
+                st.caption(f"Equipo que avanza calculado automaticamente: {away_team_name}")
+            else:
+                advancing_options = [home_team_name, away_team_name]
+            advancing_name = st.selectbox(
+                "Equipo que avanza",
+                advancing_options,
+                index=next(
+                    (
+                        idx
+                        for idx, name in enumerate(advancing_options)
+                        if team_ids.get(name) == clean_value(match.get("advancing_team_id"))
+                    ),
+                    0,
+                ),
+                disabled=len(advancing_options) == 1,
+            )
         submitted = st.form_submit_button("Guardar resultado", width="stretch")
 
     if submitted:
         try:
+            payload = validate_real_match_result(
+                match=match,
+                status=status,
+                home_score=int(home_score),
+                away_score=int(away_score),
+                home_score_penalties=int(home_pen) if int(home_pen) else None,
+                away_score_penalties=int(away_pen) if int(away_pen) else None,
+                advancing_team_id=clean_value(team_ids.get(advancing_name)),
+            )
             update_match(
                 match,
-                {
-                    "status": status,
-                    "home_score": int(home_score),
-                    "away_score": int(away_score),
-                    "home_score_penalties": int(home_pen),
-                    "away_score_penalties": int(away_pen),
-                    "winner_team_id": clean_value(team_ids.get(winner_name)),
-                    "advancing_team_id": clean_value(team_ids.get(advancing_name)),
-                },
+                payload,
             )
             st.success("Resultado guardado.")
             st.session_state["last_saved_match_id"] = match["id"]
+        except RealTournamentError as exc:
+            st.error(str(exc))
         except Exception as exc:
             st.error(f"No se pudo guardar el resultado: {exc}")
 
@@ -352,6 +422,22 @@ def render_matches_tab(team_names: list[str], team_ids: dict) -> None:
 
     if recalc_disabled:
         st.caption("Guarda el resultado seleccionado para habilitar el recálculo de ese partido.")
+
+    if str(match.get("display_stage") or "").lower() == "group":
+        group_action_cols = st.columns(2)
+        if group_action_cols[0].button("Recalcular clasificaciones de grupos", width="stretch"):
+            try:
+                result = recalculate_real_group_standings()
+                st.success(f"Clasificaciones recalculadas: {result['updated']} filas en {result['groups']} grupos.")
+            except Exception as exc:
+                st.error(f"No se pudieron recalcular las clasificaciones: {exc}")
+        if group_action_cols[1].button("Recalcular standings + puntos", width="stretch"):
+            try:
+                recalculate_real_group_standings()
+                recalculate_group_scores()
+                st.success("Standings reales y puntos de grupo recalculados.")
+            except Exception as exc:
+                st.error(f"No se pudieron recalcular standings y puntos: {exc}")
 
 
 def render_group_standings_tab() -> None:
@@ -397,6 +483,13 @@ def render_group_standings_tab() -> None:
         except Exception as exc:
             st.error(f"No se pudieron recalcular los puntos de grupos: {exc}")
 
+    if st.button("Recalcular clasificaciones de grupos", width="stretch"):
+        try:
+            result = recalculate_real_group_standings()
+            st.success(f"Clasificaciones recalculadas: {result['updated']} filas en {result['groups']} grupos.")
+        except Exception as exc:
+            st.error(f"No se pudieron recalcular las clasificaciones: {exc}")
+
 
 def render_tournament_tab() -> None:
     st.subheader("Tournament results")
@@ -431,6 +524,14 @@ def render_tournament_tab() -> None:
         except Exception as exc:
             st.error(f"No se pudieron recalcular los especiales: {exc}")
 
+    if st.button("Actualizar resultados finales del torneo", width="stretch"):
+        try:
+            result = update_tournament_results_from_real_knockout()
+            st.success("Tournament results actualizado desde eliminatorias reales.")
+            st.caption(", ".join(result["updated_fields"]))
+        except Exception as exc:
+            st.error(f"No se pudieron actualizar los resultados finales: {exc}")
+
 
 def render_tools_tab() -> None:
     st.subheader("Herramientas")
@@ -445,6 +546,32 @@ def render_tools_tab() -> None:
             st.success("Todos los puntos recalculados.")
         except Exception as exc:
             st.error(f"No se pudieron recalcular todos los puntos: {exc}")
+
+    tool_cols = st.columns(3)
+    if tool_cols[0].button("Actualizar dieciseisavos reales desde clasificaciones", width="stretch"):
+        try:
+            result = update_real_round_of_32_from_group_standings()
+            st.success(f"Dieciseisavos actualizados: {result['updated']} partidos. Clave terceros: {result['third_place_key']}.")
+        except Exception as exc:
+            st.error(f"No se pudieron actualizar los dieciseisavos reales: {exc}")
+    if tool_cols[1].button("Actualizar siguientes rondas reales", width="stretch"):
+        try:
+            result = update_real_knockout_next_rounds()
+            st.success(f"Siguientes rondas actualizadas: {result['updated']} partidos.")
+            if result["missing_sources"]:
+                st.info(f"Faltan ganadores previos para {len(result['missing_sources'])} partidos.")
+        except Exception as exc:
+            st.error(f"No se pudieron actualizar las siguientes rondas: {exc}")
+    if tool_cols[2].button("Recalcular standings + cuadro real + puntos", width="stretch"):
+        try:
+            recalculate_real_group_standings()
+            update_real_round_of_32_from_group_standings()
+            update_real_knockout_next_rounds()
+            update_tournament_results_from_real_knockout()
+            recalculate_all_scores()
+            st.success("Standings, cuadro real, resultados finales y puntos recalculados.")
+        except Exception as exc:
+            st.error(f"No se pudo ejecutar el flujo completo: {exc}")
 
     st.divider()
     st.subheader("Exportaciones CSV")

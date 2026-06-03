@@ -327,6 +327,29 @@ La página `Admin` permite:
 - Consultar métricas de jugadores, partidos, apuestas y eventos.
 - Gestionar el estado de pago de los participantes.
 
+### Flujo cuando empiezan los resultados reales
+
+1. El admin introduce el resultado del partido desde `Admin > Partidos`.
+2. La app deriva `winner_team_id` automaticamente. En fase de grupos un empate
+   deja el ganador a `NULL`.
+3. Si el partido es de grupo, el admin ejecuta `Recalcular clasificaciones de
+   grupos`. La app recalcula `group_standings` desde los partidos finalizados.
+4. Al terminar los 72 partidos de grupo, el admin ejecuta `Actualizar
+   dieciseisavos reales desde clasificaciones`. La app usa
+   `data/third_place_assignment_2026.json` para asignar los mejores terceros.
+5. Durante eliminatorias, el admin introduce resultados y ejecuta `Actualizar
+   siguientes rondas reales` para rellenar octavos, cuartos, semifinales, tercer
+   puesto y final.
+6. Cuando la final esta terminada, el admin ejecuta `Actualizar resultados
+   finales del torneo`. Esto actualiza campeon, subcampeon y semifinalistas sin
+   tocar goleador ni MVP.
+7. El admin ejecuta `Recalcular todos los puntos` o `Recalcular standings +
+   cuadro real + puntos` para refrescar `score_events` y el `leaderboard`.
+
+Los desempates de grupos se calculan por puntos, diferencia de goles, goles a
+favor y nombre del equipo como fallback determinista. No se implementan todavia
+criterios FIFA adicionales como fair play o ranking FIFA.
+
 ### Control de pagos
 
 La pestaña `Jugadores y pagos` incluye métricas, filtros y guardado masivo:
