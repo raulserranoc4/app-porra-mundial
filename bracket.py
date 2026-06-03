@@ -7,6 +7,9 @@ from typing import Iterable
 
 from sqlalchemy import text
 
+from db import table_columns
+from utils.prediction_result import prediction_result_db_value
+
 
 GROUP_LETTERS = tuple("ABCDEFGHIJKL")
 ROUND_OF_32_MATCH_NUMBERS = tuple(range(73, 89))
@@ -69,6 +72,13 @@ KNOCKOUT_STAGE_ORDER = (
     "third_place",
     "final",
 )
+
+
+def _prediction_columns() -> set[str]:
+    try:
+        return table_columns("predictions")
+    except Exception:
+        return set()
 
 
 class BracketProjectionError(Exception):
@@ -716,15 +726,26 @@ def save_knockout_round_predictions(
             "predicted_advancing_team_id": payload["predicted_advancing_team_id"],
             "predicted_goes_to_penalties": payload["predicted_goes_to_penalties"],
         }
+        has_predicted_result = "predicted_result" in _prediction_columns()
+        if has_predicted_result:
+            values["predicted_result"] = prediction_result_db_value(
+                payload["predicted_home_score"],
+                payload["predicted_away_score"],
+            )
         if match_id in existing_match_ids:
+            predicted_result_assignment = (
+                ",\n                        predicted_result = :predicted_result"
+                if has_predicted_result
+                else ""
+            )
             session.execute(
                 text(
-                    """
+                    f"""
                     UPDATE predictions
                     SET predicted_home_score = :predicted_home_score,
                         predicted_away_score = :predicted_away_score,
                         predicted_advancing_team_id = :predicted_advancing_team_id,
-                        predicted_goes_to_penalties = :predicted_goes_to_penalties
+                        predicted_goes_to_penalties = :predicted_goes_to_penalties{predicted_result_assignment}
                     WHERE player_id = :player_id
                       AND match_id = :match_id
                     """
@@ -733,16 +754,18 @@ def save_knockout_round_predictions(
             )
             updated += 1
         else:
+            predicted_result_column = ",\n                        predicted_result" if has_predicted_result else ""
+            predicted_result_value = ",\n                        :predicted_result" if has_predicted_result else ""
             session.execute(
                 text(
-                    """
+                    f"""
                     INSERT INTO predictions (
                         player_id,
                         match_id,
                         predicted_home_score,
                         predicted_away_score,
                         predicted_advancing_team_id,
-                        predicted_goes_to_penalties
+                        predicted_goes_to_penalties{predicted_result_column}
                     )
                     VALUES (
                         :player_id,
@@ -750,7 +773,7 @@ def save_knockout_round_predictions(
                         :predicted_home_score,
                         :predicted_away_score,
                         :predicted_advancing_team_id,
-                        :predicted_goes_to_penalties
+                        :predicted_goes_to_penalties{predicted_result_value}
                     )
                     """
                 ),

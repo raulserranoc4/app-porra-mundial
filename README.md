@@ -44,6 +44,11 @@ Cada usuario puede tener un cuadro distinto. Las proyecciones personales se
 guardan en `predictions`, pero nunca modifican los equipos reales globales de
 `matches`.
 
+El usuario solo introduce marcadores. El resultado del partido se calcula
+automaticamente desde los goles. En eliminatorias, si el marcador no es empate,
+avanza automaticamente el ganador del marcador; con empate, el usuario elige
+que equipo avanza.
+
 ## Navegación
 
 El menú lateral está organizado así:
@@ -270,6 +275,10 @@ penales únicamente se pueden seleccionar cuando hay empate a los 90 minutos.
 
 ### Especiales
 
+Campeon, subcampeon y semifinalistas se derivan automaticamente del cuadro
+eliminatorio apostado por cada jugador. Las apuestas manuales especiales que
+quedan son maximo goleador y MVP.
+
 | Acierto | Puntos |
 | --- | ---: |
 | Campeón | 20 |
@@ -393,10 +402,12 @@ dependencias fijadas para que el despliegue sea reproducible.
 2. En Streamlit Community Cloud crea una app con la rama deseada y el entrypoint
    `app.py`.
 3. En `Advanced settings`, selecciona Python `3.12`.
-4. Pega los secretos en formato TOML. Como mínimo, configura `DATABASE_URL`:
+4. En Supabase, abre `Connect` y copia la cadena de `Session pooler`. Esta ruta
+   admite IPv4 e IPv6 y es la opción recomendada para una app persistente.
+5. Pega los secretos en formato TOML. Como mínimo, configura `DATABASE_URL`:
 
 ```toml
-DATABASE_URL = "postgresql://usuario:password@host:5432/postgres"
+DATABASE_URL = "postgresql://postgres.PROJECT_REF:password@aws-0-REGION.pooler.supabase.com:5432/postgres"
 APP_ENV = "production"
 APP_TIMEZONE = "Europe/Madrid"
 GLOBAL_PREDICTIONS_LOCK_AT = "2026-06-11T00:00:00+02:00"
@@ -411,7 +422,9 @@ DEFAULT_INVITE_CODE = "cambia-este-codigo"
 
 No subas `.env` ni `.streamlit/secrets.toml` a Git. Community Cloud expone los
 secretos de nivel raíz como variables de entorno, que es el formato consumido
-por la aplicación.
+por la aplicación. Si la contraseña contiene caracteres reservados de una URL,
+como `@`, `:`, `/`, `?` o `#`, codifícalos antes de incluirla en
+`DATABASE_URL`.
 
 ## Tests
 

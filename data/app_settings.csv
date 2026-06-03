@@ -1,0 +1,18 @@
+key,value,value_json,description,created_at,updated_at
+app_timezone,Europe/Madrid,,Main application timezone,2026-05-29 17:04:51.87244+02,2026-05-29 17:05:21.441445+02
+football_provider,manual,,"Current football data provider: manual, mock, api_football, sportmonks, livescore_api, football_data_org",2026-05-29 17:04:51.87244+02,2026-05-29 17:05:21.441445+02
+api_football_base_url,https://v3.football.api-sports.io,,API-Football base URL,2026-05-29 17:04:51.87244+02,2026-05-29 17:05:21.441445+02
+scoring_exact_score,7,,Points for exact score,2026-05-29 17:04:51.87244+02,2026-05-29 17:05:21.441445+02
+scoring_result_sign,3,,Points for correct result sign,2026-05-29 17:04:51.87244+02,2026-05-29 17:05:21.441445+02
+scoring_goal_difference,2,,Bonus points for correct goal difference when exact score is not hit,2026-05-29 17:04:51.87244+02,2026-05-29 17:05:21.441445+02
+scoring_team_goals,1,,Bonus points per correct team goals when exact score is not hit,2026-05-29 17:04:51.87244+02,2026-05-29 17:05:21.441445+02
+scoring_advancing_team,3,,Points for correct advancing team in knockout rounds,2026-05-29 17:04:51.87244+02,2026-05-29 17:05:21.441445+02
+scoring_goes_to_penalties,2,,Points for correctly predicting that a knockout match goes to penalties,2026-05-29 17:04:51.87244+02,2026-05-29 17:05:21.441445+02
+scoring_group_qualified_team,3,,Points for correctly predicting a team qualifies from group,2026-05-29 17:04:51.87244+02,2026-05-29 17:05:21.441445+02
+scoring_group_exact_position,2,,Bonus points for correctly predicting exact group position,2026-05-29 17:04:51.87244+02,2026-05-29 17:05:21.441445+02
+scoring_champion,20,,Points for correct champion,2026-05-29 17:04:51.87244+02,2026-05-29 17:05:21.441445+02
+scoring_runner_up,12,,Points for correct runner-up,2026-05-29 17:04:51.87244+02,2026-05-29 17:05:21.441445+02
+scoring_semifinalist,8,,Points per correct semifinalist,2026-05-29 17:04:51.87244+02,2026-05-29 17:05:21.441445+02
+scoring_top_scorer,15,,Points for correct top scorer,2026-05-29 17:04:51.87244+02,2026-05-29 17:05:21.441445+02
+scoring_mvp,10,,Points for correct MVP,2026-05-29 17:04:51.87244+02,2026-05-29 17:05:21.441445+02
+global_predictions_lock_at,2026-06-11T00:00:00+02:00,,Global date/time after which no predictions can be created or edited,2026-05-29 17:04:51.87244+02,2026-05-29 17:50:28.789552+02

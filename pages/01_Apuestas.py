@@ -41,6 +41,11 @@ from utils.prediction_state import (
     mark_prediction_saved,
     reset_pending_match_ids,
 )
+from utils.prediction_result import (
+    allowed_advancing_options_from_score,
+    prediction_result_db_value,
+    result_label_from_score,
+)
 from utils.ui import inject_app_css, madrid_datetime, kickoff_text, status_badge, venue_text
 
 
@@ -206,6 +211,27 @@ def is_group_stage(stage) -> bool:
     return str(clean(stage) or "").lower() in {"group", "groups", "group_stage", "fase de grupos"}
 
 
+GROUP_ORDER = list("ABCDEFGHIJKL")
+GROUP_ORDER_INDEX = {group_letter: index for index, group_letter in enumerate(GROUP_ORDER)}
+
+
+def ordered_group_letters(values) -> list[str]:
+    unique_values = {str(value) for value in values if pd.notna(value)}
+    ordered = [group_letter for group_letter in GROUP_ORDER if group_letter in unique_values]
+    extras = sorted(unique_values - set(GROUP_ORDER))
+    return ordered + extras
+
+
+def sort_group_matches(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty:
+        return df
+    sorted_df = df.copy()
+    sorted_df["_group_order"] = sorted_df["group_letter"].astype(str).map(GROUP_ORDER_INDEX).fillna(len(GROUP_ORDER))
+    sorted_df["_match_order"] = pd.to_numeric(sorted_df["match_number"], errors="coerce").fillna(sorted_df["id"])
+    sorted_df = sorted_df.sort_values(["_group_order", "_match_order", "id"], kind="stable")
+    return sorted_df.drop(columns=["_group_order", "_match_order"])
+
+
 def team_options() -> dict[str, object]:
     df = fetch_df("SELECT id, name FROM teams ORDER BY name")
     return {row["name"]: row["id"] for row in df.to_dict("records")}
@@ -261,6 +287,10 @@ def save_group_match_predictions(
             "match_id": match_id,
             "predicted_home_score": payload["predicted_home_score"],
             "predicted_away_score": payload["predicted_away_score"],
+            "predicted_result": prediction_result_db_value(
+                payload["predicted_home_score"],
+                payload["predicted_away_score"],
+            ),
             "predicted_advancing_team_id": None,
             "predicted_goes_to_penalties": False,
         }
@@ -564,22 +594,23 @@ def render_knockout_match_fields(projected_match: dict) -> tuple[dict | None, bo
         key=away_key,
         disabled=not is_open,
     )
-    if home_score > away_score:
-        options = [home_team]
-    elif away_score > home_score:
-        options = [away_team]
+    cols[2].caption(result_label_from_score(home_score, away_score, home_team, away_team))
+    cols[2].caption("Calculado automaticamente")
+    options = allowed_advancing_options_from_score(home_score, away_score, home_team, away_team)
+    if home_score == away_score:
+        if saved_warning:
+            options = [""] + options
+        advancing_name = cols[2].selectbox(
+            "Equipo que avanza",
+            options,
+            index=options.index(current_team) if current_team in options else 0,
+            key=f"ko_advancing_{user['id']}_{match_number}",
+            format_func=lambda name: name if name else "Selecciona un equipo",
+            disabled=not is_open,
+        )
     else:
-        options = [home_team, away_team]
-    if saved_warning:
-        options = [""] + options
-    advancing_name = cols[2].selectbox(
-        "Equipo que avanza",
-        options,
-        index=options.index(current_team) if current_team in options else 0,
-        key=f"ko_advancing_{user['id']}_{match_number}",
-        format_func=lambda name: name if name else "Selecciona un equipo",
-        disabled=not is_open,
-    )
+        advancing_name = options[0]
+        cols[2].caption(f"Avanza automaticamente: {advancing_name}")
     penalties_key = f"ko_penalties_{user['id']}_{match_number}"
     if penalties_key not in st.session_state:
         st.session_state[penalties_key] = (
@@ -610,6 +641,7 @@ def render_knockout_match_fields(projected_match: dict) -> tuple[dict | None, bo
             "match_number": match_number,
             "predicted_home_score": int(home_score),
             "predicted_away_score": int(away_score),
+            "predicted_result": prediction_result_db_value(home_score, away_score),
             "predicted_advancing_team_id": ids_by_name.get(advancing_name),
             "predicted_goes_to_penalties": bool(penalties),
         },
@@ -784,7 +816,7 @@ def render_knockout_tab() -> None:
 
     with st.expander("Ver clasificación proyectada de grupos"):
         group_columns = st.columns(3)
-        for index, group_letter in enumerate(sorted(bracket.tables)):
+        for index, group_letter in enumerate(ordered_group_letters(bracket.tables)):
             with group_columns[index % 3]:
                 st.markdown(f"**Grupo {group_letter}**")
                 st.dataframe(
@@ -851,7 +883,7 @@ def render_group_matches_form(
     pred_by_match: dict,
     projected_table: list[dict] | None = None,
 ) -> None:
-    group_rows = group.to_dict("records")
+    group_rows = sort_group_matches(group).to_dict("records")
     saved_count = sum(row["id"] in pred_by_match for row in group_rows)
     st.markdown(f'<div id="group-{h(group_letter)}"></div>', unsafe_allow_html=True)
     st.markdown(f"### Grupo {group_letter}")
@@ -934,10 +966,10 @@ def render_group_matches_form(
                 or int(home_score) != int(stored_home)
                 or int(away_score) != int(stored_away)
             )
+            cols[2].caption(result_label_from_score(home_score, away_score, home_team, away_team))
             if changed:
                 cols[2].warning("✏️ Cambios pendientes de guardar")
-            else:
-                cols[2].caption("El signo lo calcula la base de datos.")
+            cols[2].caption("Calculado automaticamente")
             individual_submits[match["id"]] = cols[3].form_submit_button(
                 "Guardar partido",
                 disabled=not is_open,
@@ -950,6 +982,7 @@ def render_group_matches_form(
                     "match_number": match_number,
                     "predicted_home_score": int(home_score),
                     "predicted_away_score": int(away_score),
+                    "predicted_result": prediction_result_db_value(home_score, away_score),
                 }
             )
         batch_submitted = st.form_submit_button(
@@ -1069,7 +1102,9 @@ def render_matches_tab() -> None:
     matches["calendar_date"] = matches["kickoff_time"].apply(
         lambda value: madrid_datetime(value).strftime("%d/%m/%Y") if madrid_datetime(value) is not None else "Por confirmar"
     )
-    regular_matches = matches[matches["display_stage"] == "group"].copy()
+    # Los grupos deben mostrarse siempre en orden alfabético A-L
+    # independientemente del orden devuelto por la base de datos.
+    regular_matches = sort_group_matches(matches[matches["display_stage"] == "group"].copy())
     progress = get_progress_counts(
         st.session_state,
         player_id=user["id"],
@@ -1098,11 +1133,13 @@ def render_matches_tab() -> None:
         ["Todas"] + sorted(regular_matches["calendar_date"].dropna().unique().tolist()),
         key="selected_date",
     )
-    selected_group = filter_cols[1].selectbox(
+    group_options = ordered_group_letters(regular_matches["group_letter"].dropna().unique())
+    selected_group_label = filter_cols[1].selectbox(
         "Grupo",
-        ["Todos"] + sorted([str(value) for value in regular_matches["group_letter"].dropna().unique()]),
-        key="selected_group",
+        ["Todos"] + [f"Grupo {group_letter}" for group_letter in group_options],
+        key="selected_group_label",
     )
+    selected_group = selected_group_label.replace("Grupo ", "", 1) if selected_group_label != "Todos" else "Todos"
     stage_options = sorted([str(value) for value in regular_matches["display_stage"].dropna().unique()])
     selected_stage = filter_cols[2].selectbox("Fase", ["Todas"] + stage_options, key="selected_phase")
     team_names = sorted(teams.keys())
@@ -1139,25 +1176,23 @@ def render_matches_tab() -> None:
         st.info("No hay partidos con esos filtros.")
         return
 
-    visible_groups = filtered[["display_stage", "group_letter"]].drop_duplicates()
-    for _, visible_group in visible_groups.iterrows():
-        stage = visible_group["display_stage"]
-        group_letter = visible_group["group_letter"]
-        group = regular_matches[
-            (regular_matches["display_stage"] == stage)
-            & (regular_matches["group_letter"] == group_letter)
-        ].copy()
-        label = stage_label(stage)
-        if pd.notna(group_letter):
-            label = f"Grupo {group_letter} · {label}"
-        expanded = is_group_stage(stage)
-        with st.expander(label, expanded=expanded):
-            render_group_matches_form(
-                str(group_letter),
-                group,
-                pred_by_match,
-                projected_tables.get(str(group_letter)),
-            )
+    for group_letter in ordered_group_letters(filtered["group_letter"].dropna().unique()):
+        group_filtered = filtered[filtered["group_letter"].astype(str) == group_letter]
+        stages = group_filtered["display_stage"].dropna().drop_duplicates().tolist()
+        for stage in stages:
+            group = regular_matches[
+                (regular_matches["display_stage"] == stage)
+                & (regular_matches["group_letter"].astype(str) == group_letter)
+            ].copy()
+            label = f"Grupo {group_letter} - {stage_label(stage)}"
+            expanded = is_group_stage(stage)
+            with st.expander(label, expanded=expanded):
+                render_group_matches_form(
+                    str(group_letter),
+                    group,
+                    pred_by_match,
+                    projected_tables.get(str(group_letter)),
+                )
 
 
 def render_summary_tab() -> None:
@@ -1180,7 +1215,7 @@ def render_summary_tab() -> None:
 
     with st.expander("Clasificación proyectada de grupos", expanded=False):
         columns = st.columns(3)
-        for index, group_letter in enumerate(sorted(tables)):
+        for index, group_letter in enumerate(ordered_group_letters(tables)):
             with columns[index % 3]:
                 st.markdown(f"**Grupo {group_letter}**")
                 st.dataframe(projection_table(tables[group_letter]), width="stretch", hide_index=True)
