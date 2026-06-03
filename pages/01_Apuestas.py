@@ -744,12 +744,12 @@ def render_knockout_round(stage: str, projected_matches: list[dict]) -> bool:
         progress_bar.progress((updated_saved / stage_total) if stage_total else 0.0)
         st.session_state["last_save_message"] = message
         st.session_state["active_knockout_round"] = stage
-        st.success(message)
         if synced_specials["synced"]:
-            st.success(
-                "✅ Campeón, subcampeón y semifinalistas actualizados "
-                "automáticamente desde tu cuadro."
+            st.session_state["last_save_message"] = (
+                message
+                + " Campeón, subcampeón y semifinalistas actualizados automáticamente desde tu cuadro."
             )
+        st.rerun()
         return True
     except Exception as exc:
         st.error(f"No se pudo guardar la ronda. No se guardó ningún cambio. Detalle: {exc}")
@@ -1043,12 +1043,7 @@ def render_group_matches_form(
         updated_count = len(saved_ids)
         saved_metric.metric("Guardadas", f"{updated_count} / {len(group_rows)}")
         progress_bar.progress((updated_count / len(group_rows)) if group_rows else 0.0)
-        st.success(message)
-        if st.session_state.get("show_only_pending"):
-            st.info(
-                "✅ Guardado. Este partido seguirá visible hasta que pulses "
-                "`Actualizar lista de pendientes`."
-            )
+        st.rerun()
     except IntegrityError:
         st.error("No se pudieron guardar las apuestas. No se guardó ningún cambio.")
     except Exception as exc:
@@ -1301,6 +1296,9 @@ def render_specials_tab() -> None:
         unsafe_allow_html=True,
     )
 
+    if st.session_state.get("last_saved_specials"):
+        st.success(st.session_state.get("last_save_message", "Premios individuales guardados correctamente."))
+
     with st.form(f"individual_awards_{user['id']}"):
         player_cols = st.columns(2)
         top_scorer = player_cols[0].text_input(
@@ -1336,7 +1334,8 @@ def render_specials_tab() -> None:
                         insert_dynamic(conn, "special_predictions", payload)
                 message = "Premios individuales guardados correctamente."
                 remember_save(message)
-                st.success(message)
+                st.session_state["last_saved_specials"] = True
+                st.rerun()
             except Exception:
                 st.error("No se pudieron guardar los premios individuales. Inténtalo de nuevo.")
 
