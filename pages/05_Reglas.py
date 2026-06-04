@@ -35,6 +35,56 @@ st.write("A partir de esa fecha no se podrán crear ni modificar apuestas por pa
 if not lock_loaded:
     st.warning("No se ha podido leer la configuración de la base de datos. Se muestra la fecha límite prevista por defecto.")
 
+st.header("🏆 Premios")
+st.write("La aportación para participar en la porra es de **10€ por persona**.")
+st.write("Al finalizar el Mundial, el bote total se repartirá entre tres participantes:")
+
+prize_cols = st.columns(3)
+with prize_cols[0]:
+    with st.container(border=True):
+        st.subheader("🥇 1º Clasificado")
+        st.metric("Premio principal", "70%")
+        st.write("El jugador con más puntos al finalizar el torneo recibirá el premio principal.")
+with prize_cols[1]:
+    with st.container(border=True):
+        st.subheader("🥈 2º Clasificado")
+        st.metric("Premio secundario", "20%")
+        st.write("El segundo clasificado recibirá un premio secundario.")
+with prize_cols[2]:
+    with st.container(border=True):
+        st.subheader("🥉 Último Clasificado")
+        st.metric("Premio consolación", "10%")
+        st.write("El último clasificado también recibirá un premio especial de consolación.")
+
+with st.container(border=True):
+    st.subheader("🏆 Reparto del bote")
+    st.markdown(
+        """
+- **70%** para el **1º clasificado**.
+- **20%** para el **2º clasificado**.
+- **10%** para el **último clasificado**.
+"""
+    )
+    st.write("**Ejemplo con 20 jugadores:**")
+    st.table(
+        pd.DataFrame(
+            [
+                ("Bote total", "200€"),
+                ("1º puesto", "140€"),
+                ("2º puesto", "40€"),
+                ("Último puesto", "20€"),
+            ],
+            columns=["Concepto", "Importe"],
+        )
+    )
+
+st.info(
+    "El reparto se calculará automáticamente en función del número total de participantes. "
+    "Solo se tendrán en cuenta los jugadores que hayan abonado su inscripción. "
+    "La clasificación final será la mostrada en la aplicación al finalizar el torneo "
+    "y tras el recálculo definitivo de puntos."
+)
+
 st.header("⚽ Apuestas por partido")
 st.write(
     "Cada jugador predice el marcador de cada partido. El sistema comprueba automáticamente "
