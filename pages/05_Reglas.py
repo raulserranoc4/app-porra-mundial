@@ -56,28 +56,6 @@ with prize_cols[2]:
         st.metric("Premio consolación", "10%")
         st.write("El último clasificado también recibirá un premio especial de consolación.")
 
-with st.container(border=True):
-    st.subheader("🏆 Reparto del bote")
-    st.markdown(
-        """
-- **70%** para el **1º clasificado**.
-- **20%** para el **2º clasificado**.
-- **10%** para el **último clasificado**.
-"""
-    )
-    st.write("**Ejemplo con 20 jugadores:**")
-    st.table(
-        pd.DataFrame(
-            [
-                ("Bote total", "200€"),
-                ("1º puesto", "140€"),
-                ("2º puesto", "40€"),
-                ("Último puesto", "20€"),
-            ],
-            columns=["Concepto", "Importe"],
-        )
-    )
-
 st.info(
     "El reparto se calculará automáticamente en función del número total de participantes. "
     "Solo se tendrán en cuenta los jugadores que hayan abonado su inscripción. "
