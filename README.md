@@ -165,6 +165,7 @@ Variables importantes:
 | `DEFAULT_INVITE_CODE` | Código de invitación por defecto. |
 | `FOOTBALL_PROVIDER` | Provider activo: `manual`, `mock` o `api-football`. |
 | `API_FOOTBALL_KEY` | API key opcional para API-FOOTBALL. |
+| `ALLOW_LEGACY_KNOCKOUT_SCORING` | Permite puntuar apuestas eliminatorias antiguas sin snapshot; por defecto `false`. |
 
 Si existe `app_settings.key = 'global_predictions_lock_at'`, ese valor prevalece
 sobre `GLOBAL_PREDICTIONS_LOCK_AT`.
@@ -265,6 +266,34 @@ El marcador apostado corresponde siempre a los 90 minutos:
 
 Si el marcador no es empate, solo puede avanzar el ganador del marcador. Los
 penales únicamente se pueden seleccionar cuando hay empate a los 90 minutos.
+
+En eliminatorias, los puntos de marcador, signo, diferencia, goles y penales
+solo se conceden si los dos equipos del cruce apostado coinciden con los del
+cruce real. Si los mismos equipos juegan con local y visitante invertidos, el
+marcador apostado se adapta antes de calcular los puntos.
+
+El equipo que avanza se puntua por separado: suma +3 si ese equipo pasa la
+misma ronda real, aunque finalmente jugara contra otro rival o en otro
+`match_number`. Un mismo equipo solo puede conceder esos +3 una vez por jugador
+y ronda.
+
+Las apuestas eliminatorias nuevas guardan un snapshot de ambos equipos. Las
+apuestas antiguas sin snapshot no puntuan por marcador ni penales por defecto,
+pero sí pueden sumar +3 por acertar el equipo que pasa la ronda. El modo legacy
+para puntuar su marcador solo puede activarse explicitamente con
+`ALLOW_LEGACY_KNOCKOUT_SCORING=true`.
+
+Tras aplicar las columnas de snapshot, puedes rellenar de forma segura las
+predicciones de fase de grupos:
+
+```bash
+python backfill_prediction_team_snapshots.py
+```
+
+La migracion idempotente esta disponible en
+`scripts/add_prediction_team_snapshots.sql`.
+
+El script no intenta adivinar ni modificar cruces eliminatorios antiguos.
 
 ### Grupos
 

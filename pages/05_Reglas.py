@@ -91,6 +91,12 @@ st.write(
     "En eliminatorias debes elegir qué equipo avanza. Si el partido se decide por penales, "
     "los lanzamientos se registran aparte del marcador a 90 minutos."
 )
+st.warning(
+    "En eliminatorias, el marcador y los penales solo puntúan si los dos equipos "
+    "del cruce apostado coinciden con los del cruce real. Si juegan los mismos equipos "
+    "con local y visitante invertidos, la app adapta el marcador. El equipo que avanza "
+    "se puntúa por separado: suma +3 si pasa esa ronda, aunque jugara contra otro rival."
+)
 
 st.header("📋 Apuestas de grupos")
 st.write(

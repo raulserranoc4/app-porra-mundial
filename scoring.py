@@ -1,4 +1,5 @@
 import json
+import os
 import re
 from inspect import signature
 from typing import Any
@@ -22,7 +23,41 @@ MATCH_FLAG_KEYS = (
     "correct_away_goals",
     "correct_advancing_team",
     "correct_penalties",
+    "knockout_matchup_matches",
+    "knockout_matchup_reversed",
+    "knockout_score_points_allowed",
+    "advancement_points_allowed",
+    "advanced_team_in_stage",
+    "advancement_scored_by_stage",
 )
+
+KNOCKOUT_STAGE_MATCH_NUMBERS = {
+    "round_of_32": tuple(range(73, 89)),
+    "round_of_16": tuple(range(89, 97)),
+    "quarter_final": tuple(range(97, 101)),
+    "semi_final": tuple(range(101, 103)),
+    "third_place": (103,),
+    "final": (104,),
+}
+
+
+def get_knockout_stage_match_numbers(stage: str) -> tuple[int, ...]:
+    normalized_stage = str(stage or "").strip().lower()
+    if normalized_stage not in KNOCKOUT_STAGE_MATCH_NUMBERS:
+        raise ValueError(f"Fase eliminatoria no soportada: {stage!r}.")
+    return KNOCKOUT_STAGE_MATCH_NUMBERS[normalized_stage]
+
+
+def _knockout_stage_for_match(match: dict) -> str:
+    stage = str(match.get("stage") or match.get("phase") or "").strip().lower()
+    if stage in KNOCKOUT_STAGE_MATCH_NUMBERS:
+        return stage
+    match_number = match.get("match_number")
+    if match_number is not None:
+        for stage_name, match_numbers in KNOCKOUT_STAGE_MATCH_NUMBERS.items():
+            if int(match_number) in match_numbers:
+                return stage_name
+    raise ValueError(f"No se pudo determinar la ronda eliminatoria del partido {match.get('id')!r}.")
 
 
 def _result(home: int | None, away: int | None) -> str | None:
@@ -45,8 +80,18 @@ def _is_knockout(match: dict) -> bool:
 
 
 def _match_details(prediction: dict, match: dict, flags: dict[str, bool]) -> dict[str, Any]:
+    predicted_home_team_id = prediction.get("predicted_home_team_id")
+    predicted_away_team_id = prediction.get("predicted_away_team_id")
+    real_home_team_id = match.get("home_team_id")
+    real_away_team_id = match.get("away_team_id")
     return {
         **flags,
+        "predicted_home_team_id": predicted_home_team_id,
+        "predicted_away_team_id": predicted_away_team_id,
+        "real_home_team_id": real_home_team_id,
+        "real_away_team_id": real_away_team_id,
+        "predicted_matchup": [predicted_home_team_id, predicted_away_team_id],
+        "real_matchup": [real_home_team_id, real_away_team_id],
         "prediction": {
             "home": prediction.get("predicted_home_score"),
             "away": prediction.get("predicted_away_score"),
@@ -62,7 +107,25 @@ def _match_details(prediction: dict, match: dict, flags: dict[str, bool]) -> dic
     }
 
 
-def calculate_match_prediction_points(prediction: dict, match: dict) -> tuple[int, list[str], dict[str, Any]]:
+def _allow_legacy_knockout_scoring() -> bool:
+    return os.getenv("ALLOW_LEGACY_KNOCKOUT_SCORING", "false").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+        "si",
+        "sí",
+    }
+
+
+def calculate_match_prediction_points(
+    prediction: dict,
+    match: dict,
+    *,
+    advanced_team_in_stage: bool | None = None,
+    advancement_points_allowed: bool = True,
+    advancement_scored_by_stage: bool = False,
+) -> tuple[int, list[str], dict[str, Any]]:
     ph = prediction.get("predicted_home_score")
     pa = prediction.get("predicted_away_score")
     ah = match.get("home_score")
@@ -70,42 +133,96 @@ def calculate_match_prediction_points(prediction: dict, match: dict) -> tuple[in
     points = 0
     reasons: list[str] = []
     flags = {key: False for key in MATCH_FLAG_KEYS}
+    knockout = _is_knockout(match)
+    score_points_allowed = True
 
-    if ah is None or aa is None:
-        return 0, ["Partido sin resultado final."], _match_details(prediction, match, flags)
+    if knockout:
+        predicted_home_team_id = prediction.get("predicted_home_team_id")
+        predicted_away_team_id = prediction.get("predicted_away_team_id")
+        real_home_team_id = match.get("home_team_id")
+        real_away_team_id = match.get("away_team_id")
+        has_snapshot = bool(predicted_home_team_id and predicted_away_team_id)
 
-    flags["exact_score"] = ph == ah and pa == aa
-    flags["correct_result"] = _result(ph, pa) == _result(ah, aa)
-    flags["correct_goal_difference"] = ph is not None and pa is not None and (ph - pa) == (ah - aa)
-    flags["correct_home_goals"] = ph == ah
-    flags["correct_away_goals"] = pa == aa
+        if not has_snapshot and not _allow_legacy_knockout_scoring():
+            score_points_allowed = False
+            reasons.append("Apuesta antigua sin snapshot de cruce; no se puede validar el marcador.")
+        if has_snapshot:
+            flags["knockout_matchup_matches"] = bool(
+                predicted_home_team_id == real_home_team_id
+                and predicted_away_team_id == real_away_team_id
+            )
+            flags["knockout_matchup_reversed"] = bool(
+                predicted_home_team_id == real_away_team_id
+                and predicted_away_team_id == real_home_team_id
+            )
+            if not flags["knockout_matchup_matches"] and not flags["knockout_matchup_reversed"]:
+                score_points_allowed = False
+                reasons.append("El cruce apostado no coincide con el cruce real: no puntúa marcador.")
+            else:
+                flags["knockout_matchup_matches"] = True
+                if flags["knockout_matchup_reversed"]:
+                    ph, pa = pa, ph
+        flags["knockout_score_points_allowed"] = score_points_allowed
 
-    if flags["exact_score"]:
-        points += 7
-        reasons.append("Marcador exacto (+7).")
-    else:
-        if flags["correct_result"]:
-            points += 3
-            reasons.append("Signo correcto (+3).")
-        if flags["correct_goal_difference"]:
-            points += 2
-            reasons.append("Diferencia correcta (+2).")
-        if flags["correct_home_goals"]:
-            points += 1
-            reasons.append("Goles local correctos (+1).")
-        if flags["correct_away_goals"]:
-            points += 1
-            reasons.append("Goles visitante correctos (+1).")
+    if score_points_allowed:
+        if ah is None or aa is None:
+            reasons.append("Partido sin resultado final.")
+        else:
+            flags["exact_score"] = ph == ah and pa == aa
+            flags["correct_result"] = _result(ph, pa) == _result(ah, aa)
+            flags["correct_goal_difference"] = ph is not None and pa is not None and (ph - pa) == (ah - aa)
+            flags["correct_home_goals"] = ph == ah
+            flags["correct_away_goals"] = pa == aa
 
-    if _is_knockout(match):
-        flags["correct_advancing_team"] = bool(
-            prediction.get("predicted_advancing_team_id")
-            and prediction.get("predicted_advancing_team_id") == match.get("advancing_team_id")
+            if flags["exact_score"]:
+                points += 7
+                reasons.append("Marcador exacto (+7).")
+            else:
+                if flags["correct_result"]:
+                    points += 3
+                    reasons.append("Signo correcto (+3).")
+                if flags["correct_goal_difference"]:
+                    points += 2
+                    reasons.append("Diferencia correcta (+2).")
+                if flags["correct_home_goals"]:
+                    points += 1
+                    reasons.append("Goles local correctos (+1).")
+                if flags["correct_away_goals"]:
+                    points += 1
+                    reasons.append("Goles visitante correctos (+1).")
+
+    if knockout:
+        predicted_advancing_team_id = prediction.get("predicted_advancing_team_id")
+        team_advanced = (
+            bool(advanced_team_in_stage)
+            if advanced_team_in_stage is not None
+            else bool(
+                predicted_advancing_team_id
+                and predicted_advancing_team_id == match.get("advancing_team_id")
+            )
         )
-        flags["correct_penalties"] = bool(prediction.get("predicted_goes_to_penalties") and _has_penalties(match))
+        flags["advanced_team_in_stage"] = team_advanced
+        flags["advancement_points_allowed"] = bool(predicted_advancing_team_id and advancement_points_allowed)
+        flags["correct_advancing_team"] = bool(
+            predicted_advancing_team_id
+            and team_advanced
+            and advancement_points_allowed
+        )
+        flags["advancement_scored_by_stage"] = bool(
+            flags["correct_advancing_team"] and advancement_scored_by_stage
+        )
+        flags["correct_penalties"] = bool(
+            score_points_allowed
+            and prediction.get("predicted_goes_to_penalties")
+            and _has_penalties(match)
+        )
         if flags["correct_advancing_team"]:
             points += 3
-            reasons.append("Equipo que avanza correcto (+3).")
+            reasons.append("Equipo clasificado a la siguiente ronda correcto (+3).")
+        elif predicted_advancing_team_id and advanced_team_in_stage is not None and not team_advanced:
+            reasons.append("El equipo elegido no avanzó en esta ronda.")
+        elif predicted_advancing_team_id and team_advanced and not advancement_points_allowed:
+            reasons.append("Equipo clasificado correcto, ya puntuado en otra apuesta de esta ronda.")
         if flags["correct_penalties"]:
             points += 2
             reasons.append("Penales correctos (+2).")
@@ -120,27 +237,155 @@ def _insert_score_event(conn, values: dict) -> None:
         insert_dynamic(conn, "score_events", filtered)
 
 
-def recalculate_match_scores(match_id: int) -> None:
+def team_advanced_in_stage(conn, team_id, stage: str) -> bool:
+    if not team_id:
+        return False
+    match_numbers = get_knockout_stage_match_numbers(stage)
+    row = conn.execute(
+        text(
+            """
+            SELECT 1
+            FROM matches
+            WHERE status = 'finished'
+              AND advancing_team_id = :team_id
+              AND match_number BETWEEN :first_match AND :last_match
+            LIMIT 1
+            """
+        ),
+        {
+            "team_id": team_id,
+            "first_match": match_numbers[0],
+            "last_match": match_numbers[-1],
+        },
+    ).first()
+    return row is not None
+
+
+def _claim_advancement_points(
+    player_id,
+    team_id,
+    advanced_team_ids: set,
+    scored_advancements: set[tuple],
+) -> tuple[bool, bool]:
+    team_advanced = bool(team_id and team_id in advanced_team_ids)
+    key = (player_id, team_id)
+    points_allowed = bool(team_id and (not team_advanced or key not in scored_advancements))
+    if team_advanced and points_allowed:
+        scored_advancements.add(key)
+    return team_advanced, points_allowed
+
+
+def _insert_match_score_event(conn, prediction: dict, match: dict, **scoring_context) -> None:
+    points, reasons, details = calculate_match_prediction_points(
+        prediction,
+        match,
+        **scoring_context,
+    )
+    _insert_score_event(
+        conn,
+        {
+            "player_id": prediction.get("player_id"),
+            "prediction_id": prediction.get("id"),
+            "match_id": match.get("id"),
+            "category": "match",
+            "points": points,
+            "reason": " ".join(reasons),
+            "reason_json": details,
+        },
+    )
+
+
+def recalculate_knockout_stage_scores(stage: str) -> None:
+    match_numbers = get_knockout_stage_match_numbers(stage)
     with db_session() as conn:
-        conn.execute(text("DELETE FROM score_events WHERE match_id = :match_id"), {"match_id": match_id})
+        matches = [
+            dict(row)
+            for row in conn.execute(
+                text(
+                    """
+                    SELECT *
+                    FROM matches
+                    WHERE match_number BETWEEN :first_match AND :last_match
+                    ORDER BY match_number
+                    """
+                ),
+                {"first_match": match_numbers[0], "last_match": match_numbers[-1]},
+            ).mappings().all()
+        ]
+        if not matches:
+            return
+        conn.execute(
+            text(
+                """
+                DELETE FROM score_events
+                WHERE category = 'match'
+                  AND match_id IN (
+                      SELECT id
+                      FROM matches
+                      WHERE match_number BETWEEN :first_match AND :last_match
+                  )
+                """
+            ),
+            {"first_match": match_numbers[0], "last_match": match_numbers[-1]},
+        )
+        advanced_team_ids = {
+            match.get("advancing_team_id")
+            for match in matches
+            if str(match.get("status") or "").lower() == "finished"
+            and match.get("advancing_team_id")
+        }
+        scored_advancements: set[tuple] = set()
+        for match in matches:
+            predictions = [
+                dict(row)
+                for row in conn.execute(
+                    text(
+                        """
+                        SELECT *
+                        FROM predictions
+                        WHERE match_id = :match_id
+                        ORDER BY player_id, id
+                        """
+                    ),
+                    {"match_id": match["id"]},
+                ).mappings().all()
+            ]
+            for prediction in predictions:
+                team_advanced, advancement_allowed = _claim_advancement_points(
+                    prediction.get("player_id"),
+                    prediction.get("predicted_advancing_team_id"),
+                    advanced_team_ids,
+                    scored_advancements,
+                )
+                _insert_match_score_event(
+                    conn,
+                    prediction,
+                    match,
+                    advanced_team_in_stage=team_advanced,
+                    advancement_points_allowed=advancement_allowed,
+                    advancement_scored_by_stage=advancement_allowed,
+                )
+
+
+def recalculate_match_scores(match_id) -> None:
+    with db_session() as conn:
         match = conn.execute(text("SELECT * FROM matches WHERE id = :id"), {"id": match_id}).mappings().first()
         if not match:
             return
+        match = dict(match)
+
+    if _is_knockout(match):
+        recalculate_knockout_stage_scores(_knockout_stage_for_match(match))
+        return
+
+    with db_session() as conn:
+        conn.execute(
+            text("DELETE FROM score_events WHERE category = 'match' AND match_id = :match_id"),
+            {"match_id": match_id},
+        )
         predictions = conn.execute(text("SELECT * FROM predictions WHERE match_id = :match_id"), {"match_id": match_id}).mappings().all()
         for prediction in predictions:
-            points, reasons, details = calculate_match_prediction_points(dict(prediction), dict(match))
-            _insert_score_event(
-                conn,
-                {
-                    "player_id": prediction.get("player_id"),
-                    "prediction_id": prediction.get("id"),
-                    "match_id": match_id,
-                    "category": "match",
-                    "points": points,
-                    "reason": " ".join(reasons),
-                    "reason_json": details,
-                },
-            )
+            _insert_match_score_event(conn, dict(prediction), match)
 
 
 def _actual_group_positions(rows: list[dict]) -> dict:
@@ -448,8 +693,15 @@ def recalculate_special_scores() -> None:
 
 
 def recalculate_all_scores() -> None:
-    matches = fetch_df("SELECT id FROM matches").to_dict("records")
+    matches = fetch_df("SELECT * FROM matches").to_dict("records")
+    knockout_stages = set()
     for match in matches:
-        recalculate_match_scores(int(match["id"]))
+        if _is_knockout(match):
+            knockout_stages.add(_knockout_stage_for_match(match))
+        else:
+            recalculate_match_scores(match["id"])
+    for stage in KNOCKOUT_STAGE_MATCH_NUMBERS:
+        if stage in knockout_stages:
+            recalculate_knockout_stage_scores(stage)
     recalculate_group_scores()
     recalculate_special_scores()

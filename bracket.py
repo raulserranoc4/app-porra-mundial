@@ -379,12 +379,33 @@ def get_projected_round_of_32_for_player(session, player_id) -> list[dict]:
 
 
 def get_prediction_for_match(session, player_id, match_number: int) -> dict | None:
+    prediction_columns = _prediction_columns()
+    has_team_snapshots = {
+        "predicted_home_team_id",
+        "predicted_away_team_id",
+    }.issubset(prediction_columns)
+    snapshot_select = (
+        """,
+                predicted_home.name AS predicted_home_team_name,
+                predicted_away.name AS predicted_away_team_name"""
+        if has_team_snapshots
+        else ""
+    )
+    snapshot_joins = (
+        """
+            LEFT JOIN teams predicted_home ON predicted_home.id = p.predicted_home_team_id
+            LEFT JOIN teams predicted_away ON predicted_away.id = p.predicted_away_team_id"""
+        if has_team_snapshots
+        else ""
+    )
     row = session.execute(
         text(
-            """
-            SELECT p.*
+            f"""
+            SELECT
+                p.*{snapshot_select}
             FROM predictions p
             JOIN matches m ON m.id = p.match_id
+            {snapshot_joins}
             WHERE p.player_id = :player_id
               AND m.match_number = :match_number
             """
@@ -410,6 +431,20 @@ def get_projected_winner_from_prediction(
 ) -> tuple[dict | None, str | None]:
     if not prediction or not prediction.get("predicted_advancing_team_id"):
         return None, None
+    predicted_matchup = (
+        prediction.get("predicted_home_team_id"),
+        prediction.get("predicted_away_team_id"),
+    )
+    current_matchup = (
+        projected_match.get("home_team_id"),
+        projected_match.get("away_team_id"),
+    )
+    if all(predicted_matchup) and predicted_matchup != current_matchup:
+        return (
+            None,
+            "Tu cruce proyectado ha cambiado desde que guardaste esta apuesta. "
+            "Vuelve a guardarla si quieres actualizarla.",
+        )
     advancing_team_id = prediction["predicted_advancing_team_id"]
     valid_team_ids = {
         projected_match.get("home_team_id"),
@@ -668,6 +703,8 @@ def save_knockout_round_predictions(
                 "match_number": match_number,
                 "predicted_home_score": home_score,
                 "predicted_away_score": away_score,
+                "predicted_home_team_id": projected_match["home_team_id"],
+                "predicted_away_team_id": projected_match["away_team_id"],
                 "predicted_advancing_team_id": advancing_team_id,
                 "predicted_goes_to_penalties": goes_to_penalties,
             }
@@ -723,16 +760,29 @@ def save_knockout_round_predictions(
             "match_id": match_id,
             "predicted_home_score": payload["predicted_home_score"],
             "predicted_away_score": payload["predicted_away_score"],
+            "predicted_home_team_id": payload["predicted_home_team_id"],
+            "predicted_away_team_id": payload["predicted_away_team_id"],
             "predicted_advancing_team_id": payload["predicted_advancing_team_id"],
             "predicted_goes_to_penalties": payload["predicted_goes_to_penalties"],
         }
-        has_predicted_result = "predicted_result" in _prediction_columns()
+        prediction_columns = _prediction_columns()
+        has_predicted_result = "predicted_result" in prediction_columns
+        has_team_snapshots = {
+            "predicted_home_team_id",
+            "predicted_away_team_id",
+        }.issubset(prediction_columns)
         if has_predicted_result:
             values["predicted_result"] = prediction_result_db_value(
                 payload["predicted_home_score"],
                 payload["predicted_away_score"],
             )
         if match_id in existing_match_ids:
+            snapshot_assignments = (
+                ",\n                        predicted_home_team_id = :predicted_home_team_id,"
+                "\n                        predicted_away_team_id = :predicted_away_team_id"
+                if has_team_snapshots
+                else ""
+            )
             predicted_result_assignment = (
                 ",\n                        predicted_result = :predicted_result"
                 if has_predicted_result
@@ -745,7 +795,7 @@ def save_knockout_round_predictions(
                     SET predicted_home_score = :predicted_home_score,
                         predicted_away_score = :predicted_away_score,
                         predicted_advancing_team_id = :predicted_advancing_team_id,
-                        predicted_goes_to_penalties = :predicted_goes_to_penalties{predicted_result_assignment}
+                        predicted_goes_to_penalties = :predicted_goes_to_penalties{snapshot_assignments}{predicted_result_assignment}
                     WHERE player_id = :player_id
                       AND match_id = :match_id
                     """
@@ -754,6 +804,18 @@ def save_knockout_round_predictions(
             )
             updated += 1
         else:
+            snapshot_columns = (
+                ",\n                        predicted_home_team_id,"
+                "\n                        predicted_away_team_id"
+                if has_team_snapshots
+                else ""
+            )
+            snapshot_values = (
+                ",\n                        :predicted_home_team_id,"
+                "\n                        :predicted_away_team_id"
+                if has_team_snapshots
+                else ""
+            )
             predicted_result_column = ",\n                        predicted_result" if has_predicted_result else ""
             predicted_result_value = ",\n                        :predicted_result" if has_predicted_result else ""
             session.execute(
@@ -765,7 +827,7 @@ def save_knockout_round_predictions(
                         predicted_home_score,
                         predicted_away_score,
                         predicted_advancing_team_id,
-                        predicted_goes_to_penalties{predicted_result_column}
+                        predicted_goes_to_penalties{snapshot_columns}{predicted_result_column}
                     )
                     VALUES (
                         :player_id,
@@ -773,7 +835,7 @@ def save_knockout_round_predictions(
                         :predicted_home_score,
                         :predicted_away_score,
                         :predicted_advancing_team_id,
-                        :predicted_goes_to_penalties{predicted_result_value}
+                        :predicted_goes_to_penalties{snapshot_values}{predicted_result_value}
                     )
                     """
                 ),

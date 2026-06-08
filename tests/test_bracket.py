@@ -137,17 +137,29 @@ class BracketTests(unittest.TestCase):
                 "bracket.build_full_projected_knockout_bracket",
                 return_value=projected_matches,
             ):
-                result = save_knockout_round_predictions(
-                    session,
-                    player_id="player",
-                    round_name="round_of_16",
-                    projected_matches_payload=payloads,
-                )
+                with patch(
+                    "bracket._prediction_columns",
+                    return_value={
+                        "predicted_result",
+                        "predicted_home_team_id",
+                        "predicted_away_team_id",
+                    },
+                ):
+                    result = save_knockout_round_predictions(
+                        session,
+                        player_id="player",
+                        round_name="round_of_16",
+                        projected_matches_payload=payloads,
+                    )
 
         self.assertEqual(result, {"guardadas": 1, "actualizadas": 1, "errores": []})
         self.assertEqual(len(session.writes), 2)
         self.assertIn("UPDATE predictions", session.writes[0][0])
         self.assertIn("INSERT INTO predictions", session.writes[1][0])
+        self.assertEqual(session.writes[0][1]["predicted_home_team_id"], "SWE")
+        self.assertEqual(session.writes[0][1]["predicted_away_team_id"], "BRA")
+        self.assertEqual(session.writes[1][1]["predicted_home_team_id"], "ESP")
+        self.assertEqual(session.writes[1][1]["predicted_away_team_id"], "ARG")
 
     def test_knockout_round_validation_does_not_write_partial_results(self):
         class NoWriteSession:
@@ -327,6 +339,26 @@ class BracketTests(unittest.TestCase):
 
         self.assertIsNone(winner)
         self.assertIn("ya no coincide", warning)
+
+    def test_changed_saved_matchup_does_not_propagate(self):
+        match = {
+            "home_team_id": "SWE",
+            "home_team_name": "Suecia",
+            "away_team_id": "BRA",
+            "away_team_name": "Brasil",
+        }
+
+        winner, warning = get_projected_winner_from_prediction(
+            {
+                "predicted_home_team_id": "ESP",
+                "predicted_away_team_id": "BRA",
+                "predicted_advancing_team_id": "BRA",
+            },
+            match,
+        )
+
+        self.assertIsNone(winner)
+        self.assertIn("cruce proyectado ha cambiado", warning)
 
     def test_inconsistent_saved_score_does_not_propagate(self):
         match = {

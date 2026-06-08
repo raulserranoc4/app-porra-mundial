@@ -449,6 +449,19 @@ def current_prediction_text(prediction: dict, teams_by_id: dict) -> str:
 def knockout_prediction_warning(prediction: dict, projected_match: dict) -> str | None:
     if not prediction:
         return None
+    saved_matchup = (
+        clean(prediction.get("predicted_home_team_id")),
+        clean(prediction.get("predicted_away_team_id")),
+    )
+    current_matchup = (
+        clean(projected_match.get("home_team_id")),
+        clean(projected_match.get("away_team_id")),
+    )
+    if all(saved_matchup) and saved_matchup != current_matchup:
+        return (
+            "Tu cruce proyectado ha cambiado desde que guardaste esta apuesta. "
+            "Vuelve a guardarla si quieres actualizarla."
+        )
     home_score = clean(prediction.get("predicted_home_score"))
     away_score = clean(prediction.get("predicted_away_score"))
     if home_score is None or away_score is None:
@@ -464,6 +477,18 @@ def knockout_prediction_warning(prediction: dict, projected_match: dict) -> str 
     if is_valid:
         return None
     return "Esta apuesta guardada es inconsistente con el marcador. Corrígela y vuelve a guardar."
+
+
+def saved_knockout_matchup_text(prediction: dict) -> str | None:
+    if not prediction:
+        return None
+    home_team_id = clean(prediction.get("predicted_home_team_id"))
+    away_team_id = clean(prediction.get("predicted_away_team_id"))
+    if not home_team_id or not away_team_id:
+        return "Cruce guardado: apuesta antigua sin snapshot de equipos"
+    home_name = clean(prediction.get("predicted_home_team_name")) or str(home_team_id)
+    away_name = clean(prediction.get("predicted_away_team_name")) or str(away_team_id)
+    return f"Cruce guardado: {home_name} vs {away_name}"
 
 
 def projection_table(rows: list[dict]) -> pd.DataFrame:
@@ -547,6 +572,9 @@ def render_knockout_match_fields(projected_match: dict) -> tuple[dict | None, bo
         """,
         unsafe_allow_html=True,
     )
+    saved_matchup_text = saved_knockout_matchup_text(prediction)
+    if saved_matchup_text:
+        st.caption(saved_matchup_text)
     if projected_match.get("warning"):
         st.warning(projected_match["warning"])
     saved_warning = knockout_prediction_warning(prediction, projected_match)
@@ -642,6 +670,8 @@ def render_knockout_match_fields(projected_match: dict) -> tuple[dict | None, bo
             "predicted_home_score": int(home_score),
             "predicted_away_score": int(away_score),
             "predicted_result": prediction_result_db_value(home_score, away_score),
+            "predicted_home_team_id": projected_match["home_team_id"],
+            "predicted_away_team_id": projected_match["away_team_id"],
             "predicted_advancing_team_id": ids_by_name.get(advancing_name),
             "predicted_goes_to_penalties": bool(penalties),
         },

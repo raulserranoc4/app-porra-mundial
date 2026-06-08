@@ -1,16 +1,19 @@
 import json
+import os
 import unittest
 from unittest.mock import patch
 
 import pandas as pd
 
 from scoring import (
+    _claim_advancement_points,
     _calculate_projected_tables_for_scoring,
     _completed_group_letters,
     _insert_score_event,
     calculate_group_prediction_points,
     calculate_match_prediction_points,
     calculate_special_prediction_points,
+    get_knockout_stage_match_numbers,
     recalculate_all_scores,
 )
 
@@ -39,6 +42,301 @@ class ScoringTests(unittest.TestCase):
         self.assertFalse(details["exact_score"])
         self.assertTrue(details["correct_result"])
         self.assertTrue(details["correct_goal_difference"])
+
+    def test_knockout_matching_snapshot_scores_normally(self):
+        points, _reasons, details = calculate_match_prediction_points(
+            {
+                "predicted_home_score": 2,
+                "predicted_away_score": 1,
+                "predicted_home_team_id": "BRA",
+                "predicted_away_team_id": "ESP",
+            },
+            {
+                "home_score": 2,
+                "away_score": 1,
+                "home_team_id": "BRA",
+                "away_team_id": "ESP",
+                "stage": "round_of_32",
+            },
+        )
+
+        self.assertEqual(points, 7)
+        self.assertTrue(details["exact_score"])
+        self.assertTrue(details["knockout_matchup_matches"])
+        self.assertFalse(details["knockout_matchup_reversed"])
+
+    def test_knockout_reversed_snapshot_swaps_score_for_scoring(self):
+        points, _reasons, details = calculate_match_prediction_points(
+            {
+                "predicted_home_score": 2,
+                "predicted_away_score": 1,
+                "predicted_home_team_id": "BRA",
+                "predicted_away_team_id": "ESP",
+            },
+            {
+                "home_score": 1,
+                "away_score": 2,
+                "home_team_id": "ESP",
+                "away_team_id": "BRA",
+                "stage": "round_of_32",
+            },
+        )
+
+        self.assertEqual(points, 7)
+        self.assertTrue(details["exact_score"])
+        self.assertTrue(details["knockout_matchup_matches"])
+        self.assertTrue(details["knockout_matchup_reversed"])
+
+    def test_knockout_different_matchup_scores_zero(self):
+        points, reasons, details = calculate_match_prediction_points(
+            {
+                "predicted_home_score": 2,
+                "predicted_away_score": 1,
+                "predicted_home_team_id": "BRA",
+                "predicted_away_team_id": "ESP",
+                "predicted_advancing_team_id": "BRA",
+                "predicted_goes_to_penalties": True,
+            },
+            {
+                "home_score": 2,
+                "away_score": 1,
+                "home_team_id": "ESP",
+                "away_team_id": "GER",
+                "advancing_team_id": "ESP",
+                "home_score_penalties": 4,
+                "away_score_penalties": 3,
+                "stage": "round_of_32",
+            },
+        )
+
+        self.assertEqual(points, 0)
+        self.assertIn("no coincide", reasons[0])
+        self.assertFalse(details["knockout_matchup_matches"])
+        self.assertFalse(details["correct_advancing_team"])
+        self.assertFalse(details["correct_penalties"])
+        self.assertEqual(details["predicted_matchup"], ["BRA", "ESP"])
+        self.assertEqual(details["real_matchup"], ["ESP", "GER"])
+
+    def test_knockout_one_matching_team_scores_zero(self):
+        points, _reasons, _details = calculate_match_prediction_points(
+            {
+                "predicted_home_score": 2,
+                "predicted_away_score": 1,
+                "predicted_home_team_id": "BRA",
+                "predicted_away_team_id": "ESP",
+            },
+            {
+                "home_score": 2,
+                "away_score": 1,
+                "home_team_id": "BRA",
+                "away_team_id": "SWE",
+                "stage": "round_of_32",
+            },
+        )
+
+        self.assertEqual(points, 0)
+
+    def test_knockout_advancing_team_scores_even_when_matchup_differs(self):
+        matching_points, _reasons, matching_details = calculate_match_prediction_points(
+            {
+                "predicted_home_score": 0,
+                "predicted_away_score": 0,
+                "predicted_home_team_id": "BRA",
+                "predicted_away_team_id": "ESP",
+                "predicted_advancing_team_id": "BRA",
+            },
+            {
+                "home_score": 1,
+                "away_score": 1,
+                "home_team_id": "BRA",
+                "away_team_id": "ESP",
+                "advancing_team_id": "BRA",
+                "stage": "round_of_32",
+            },
+        )
+        mismatching_points, _reasons, mismatching_details = calculate_match_prediction_points(
+            {
+                "predicted_home_score": 0,
+                "predicted_away_score": 0,
+                "predicted_home_team_id": "BRA",
+                "predicted_away_team_id": "ESP",
+                "predicted_advancing_team_id": "BRA",
+            },
+            {
+                "home_score": 1,
+                "away_score": 1,
+                "home_team_id": "BRA",
+                "away_team_id": "SWE",
+                "advancing_team_id": "SWE",
+                "stage": "round_of_32",
+            },
+            advanced_team_in_stage=True,
+            advancement_points_allowed=True,
+            advancement_scored_by_stage=True,
+        )
+
+        self.assertEqual(matching_points, 8)
+        self.assertTrue(matching_details["correct_advancing_team"])
+        self.assertEqual(mismatching_points, 3)
+        self.assertTrue(mismatching_details["correct_advancing_team"])
+        self.assertFalse(mismatching_details["knockout_score_points_allowed"])
+        self.assertTrue(mismatching_details["advancement_scored_by_stage"])
+
+    def test_knockout_matching_matchup_exact_score_and_stage_advancement_scores_ten(self):
+        points, _reasons, details = calculate_match_prediction_points(
+            {
+                "predicted_home_score": 2,
+                "predicted_away_score": 1,
+                "predicted_home_team_id": "BRA",
+                "predicted_away_team_id": "ESP",
+                "predicted_advancing_team_id": "BRA",
+            },
+            {
+                "home_score": 2,
+                "away_score": 1,
+                "home_team_id": "BRA",
+                "away_team_id": "ESP",
+                "advancing_team_id": "BRA",
+                "stage": "round_of_32",
+            },
+            advanced_team_in_stage=True,
+            advancement_points_allowed=True,
+            advancement_scored_by_stage=True,
+        )
+
+        self.assertEqual(points, 10)
+        self.assertTrue(details["exact_score"])
+        self.assertTrue(details["correct_advancing_team"])
+
+    def test_knockout_reversed_matchup_exact_score_and_stage_advancement_scores_ten(self):
+        points, _reasons, details = calculate_match_prediction_points(
+            {
+                "predicted_home_score": 2,
+                "predicted_away_score": 1,
+                "predicted_home_team_id": "BRA",
+                "predicted_away_team_id": "ESP",
+                "predicted_advancing_team_id": "BRA",
+            },
+            {
+                "home_score": 1,
+                "away_score": 2,
+                "home_team_id": "ESP",
+                "away_team_id": "BRA",
+                "advancing_team_id": "BRA",
+                "stage": "round_of_32",
+            },
+            advanced_team_in_stage=True,
+            advancement_points_allowed=True,
+            advancement_scored_by_stage=True,
+        )
+
+        self.assertEqual(points, 10)
+        self.assertTrue(details["knockout_matchup_reversed"])
+
+    def test_knockout_different_matchup_and_team_not_advanced_scores_zero(self):
+        points, reasons, details = calculate_match_prediction_points(
+            {
+                "predicted_home_score": 2,
+                "predicted_away_score": 1,
+                "predicted_home_team_id": "BRA",
+                "predicted_away_team_id": "ESP",
+                "predicted_advancing_team_id": "BRA",
+            },
+            {
+                "home_score": 2,
+                "away_score": 1,
+                "home_team_id": "ESP",
+                "away_team_id": "GER",
+                "advancing_team_id": "ESP",
+                "stage": "round_of_32",
+            },
+            advanced_team_in_stage=False,
+            advancement_points_allowed=False,
+            advancement_scored_by_stage=False,
+        )
+
+        self.assertEqual(points, 0)
+        self.assertTrue(any("no avanzó" in reason for reason in reasons))
+        self.assertFalse(details["advanced_team_in_stage"])
+
+    def test_knockout_penalties_do_not_score_when_matchup_differs(self):
+        points, _reasons, details = calculate_match_prediction_points(
+            {
+                "predicted_home_score": 1,
+                "predicted_away_score": 1,
+                "predicted_home_team_id": "BRA",
+                "predicted_away_team_id": "ESP",
+                "predicted_advancing_team_id": "BRA",
+                "predicted_goes_to_penalties": True,
+            },
+            {
+                "home_score": 1,
+                "away_score": 1,
+                "home_team_id": "ESP",
+                "away_team_id": "GER",
+                "advancing_team_id": "ESP",
+                "home_score_penalties": 4,
+                "away_score_penalties": 3,
+                "stage": "round_of_32",
+            },
+            advanced_team_in_stage=True,
+            advancement_points_allowed=True,
+            advancement_scored_by_stage=True,
+        )
+
+        self.assertEqual(points, 3)
+        self.assertFalse(details["correct_penalties"])
+
+    def test_same_team_advancement_only_scores_once_per_player_and_stage(self):
+        scored_advancements = set()
+        advanced_team_ids = {"BRA"}
+
+        first = _claim_advancement_points(7, "BRA", advanced_team_ids, scored_advancements)
+        duplicate = _claim_advancement_points(7, "BRA", advanced_team_ids, scored_advancements)
+        other_player = _claim_advancement_points(8, "BRA", advanced_team_ids, scored_advancements)
+        did_not_advance = _claim_advancement_points(7, "ESP", advanced_team_ids, scored_advancements)
+
+        self.assertEqual(first, (True, True))
+        self.assertEqual(duplicate, (True, False))
+        self.assertEqual(other_player, (True, True))
+        self.assertEqual(did_not_advance, (False, True))
+
+    def test_knockout_stage_match_number_mapping(self):
+        self.assertEqual(get_knockout_stage_match_numbers("round_of_32"), tuple(range(73, 89)))
+        self.assertEqual(get_knockout_stage_match_numbers("final"), (104,))
+
+    def test_knockout_without_snapshot_scores_zero_by_default(self):
+        with patch.dict(os.environ, {}, clear=False):
+            os.environ.pop("ALLOW_LEGACY_KNOCKOUT_SCORING", None)
+            points, reasons, details = calculate_match_prediction_points(
+                {"predicted_home_score": 2, "predicted_away_score": 1},
+                {
+                    "home_score": 2,
+                    "away_score": 1,
+                    "home_team_id": "BRA",
+                    "away_team_id": "ESP",
+                    "stage": "round_of_32",
+                },
+            )
+
+        self.assertEqual(points, 0)
+        self.assertIn("sin snapshot", reasons[0])
+        self.assertFalse(details["knockout_matchup_matches"])
+
+    def test_knockout_legacy_scoring_can_be_enabled_explicitly(self):
+        with patch.dict(os.environ, {"ALLOW_LEGACY_KNOCKOUT_SCORING": "true"}):
+            points, _reasons, _details = calculate_match_prediction_points(
+                {"predicted_home_score": 2, "predicted_away_score": 1},
+                {
+                    "home_score": 2,
+                    "away_score": 1,
+                    "home_team_id": "BRA",
+                    "away_team_id": "ESP",
+                    "stage": "round_of_32",
+                },
+            )
+
+        self.assertEqual(points, 7)
 
     def test_insert_score_event_filters_missing_prediction_id(self):
         captured = {}
