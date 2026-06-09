@@ -413,7 +413,12 @@ def render_matches_tab(team_names: list[str], team_ids: dict) -> None:
             st.error(f"No se pudo guardar el resultado: {exc}")
 
     recalc_disabled = st.session_state.get("last_saved_match_id") != match["id"]
-    if st.button("Recalcular puntos de este partido", disabled=recalc_disabled, width="stretch"):
+    if st.button(
+        "Recalcular puntos de este partido",
+        key="matches_recalculate_selected_match",
+        disabled=recalc_disabled,
+        width="stretch",
+    ):
         try:
             recalculate_match_scores(match["id"])
             st.success("Puntos del partido recalculados.")
@@ -425,13 +430,21 @@ def render_matches_tab(team_names: list[str], team_ids: dict) -> None:
 
     if str(match.get("display_stage") or "").lower() == "group":
         group_action_cols = st.columns(2)
-        if group_action_cols[0].button("Recalcular clasificaciones de grupos", width="stretch"):
+        if group_action_cols[0].button(
+            "Recalcular clasificaciones de grupos",
+            key="matches_recalculate_group_standings",
+            width="stretch",
+        ):
             try:
                 result = recalculate_real_group_standings()
                 st.success(f"Clasificaciones recalculadas: {result['updated']} filas en {result['groups']} grupos.")
             except Exception as exc:
                 st.error(f"No se pudieron recalcular las clasificaciones: {exc}")
-        if group_action_cols[1].button("Recalcular standings + puntos", width="stretch"):
+        if group_action_cols[1].button(
+            "Recalcular standings + puntos",
+            key="matches_recalculate_group_standings_and_scores",
+            width="stretch",
+        ):
             try:
                 recalculate_real_group_standings()
                 recalculate_group_scores()
@@ -464,7 +477,7 @@ def render_group_standings_tab() -> None:
     with st.expander("Editar tabla de grupos", expanded=False):
         edited = st.data_editor(standings, width="stretch", num_rows="fixed", key="group_standings_editor")
     action_cols = st.columns(2)
-    if action_cols[0].button("Guardar group_standings", width="stretch"):
+    if action_cols[0].button("Guardar group_standings", key="groups_save_standings", width="stretch"):
         try:
             with db_session() as conn:
                 for row in edited.to_dict("records"):
@@ -476,14 +489,18 @@ def render_group_standings_tab() -> None:
         except Exception as exc:
             st.error(f"No se pudo guardar group_standings: {exc}")
 
-    if action_cols[1].button("Recalcular puntos de grupos", width="stretch"):
+    if action_cols[1].button("Recalcular puntos de grupos", key="groups_recalculate_scores", width="stretch"):
         try:
             recalculate_group_scores()
             st.success("Puntos de grupos recalculados.")
         except Exception as exc:
             st.error(f"No se pudieron recalcular los puntos de grupos: {exc}")
 
-    if st.button("Recalcular clasificaciones de grupos", width="stretch"):
+    if st.button(
+        "Recalcular clasificaciones de grupos",
+        key="groups_recalculate_real_standings",
+        width="stretch",
+    ):
         try:
             result = recalculate_real_group_standings()
             st.success(f"Clasificaciones recalculadas: {result['updated']} filas en {result['groups']} grupos.")
@@ -504,7 +521,7 @@ def render_tournament_tab() -> None:
     with st.expander("Editar resultados del torneo", expanded=False):
         edited_results = st.data_editor(results, width="stretch", num_rows="dynamic", key="tournament_results_editor")
     action_cols = st.columns(2)
-    if action_cols[0].button("Guardar tournament_results", width="stretch"):
+    if action_cols[0].button("Guardar tournament_results", key="tournament_save_results", width="stretch"):
         try:
             with db_session() as conn:
                 for row in edited_results.to_dict("records"):
@@ -517,14 +534,18 @@ def render_tournament_tab() -> None:
         except Exception as exc:
             st.error(f"No se pudo guardar tournament_results: {exc}")
 
-    if action_cols[1].button("Recalcular especiales", width="stretch"):
+    if action_cols[1].button("Recalcular especiales", key="tournament_recalculate_specials", width="stretch"):
         try:
             recalculate_special_scores()
             st.success("Puntos especiales recalculados.")
         except Exception as exc:
             st.error(f"No se pudieron recalcular los especiales: {exc}")
 
-    if st.button("Actualizar resultados finales del torneo", width="stretch"):
+    if st.button(
+        "Actualizar resultados finales del torneo",
+        key="tournament_update_final_results",
+        width="stretch",
+    ):
         try:
             result = update_tournament_results_from_real_knockout()
             st.success("Tournament results actualizado desde eliminatorias reales.")
@@ -540,7 +561,7 @@ def render_tools_tab() -> None:
         unsafe_allow_html=True,
     )
 
-    if st.button("Recalcular todos los puntos", width="stretch"):
+    if st.button("Recalcular todos los puntos", key="tools_recalculate_all_scores", width="stretch"):
         try:
             recalculate_all_scores()
             st.success("Todos los puntos recalculados.")
@@ -548,13 +569,21 @@ def render_tools_tab() -> None:
             st.error(f"No se pudieron recalcular todos los puntos: {exc}")
 
     tool_cols = st.columns(3)
-    if tool_cols[0].button("Actualizar dieciseisavos reales desde clasificaciones", width="stretch"):
+    if tool_cols[0].button(
+        "Actualizar dieciseisavos reales desde clasificaciones",
+        key="tools_update_real_round_of_32",
+        width="stretch",
+    ):
         try:
             result = update_real_round_of_32_from_group_standings()
             st.success(f"Dieciseisavos actualizados: {result['updated']} partidos. Clave terceros: {result['third_place_key']}.")
         except Exception as exc:
             st.error(f"No se pudieron actualizar los dieciseisavos reales: {exc}")
-    if tool_cols[1].button("Actualizar siguientes rondas reales", width="stretch"):
+    if tool_cols[1].button(
+        "Actualizar siguientes rondas reales",
+        key="tools_update_real_next_rounds",
+        width="stretch",
+    ):
         try:
             result = update_real_knockout_next_rounds()
             st.success(f"Siguientes rondas actualizadas: {result['updated']} partidos.")
@@ -562,7 +591,11 @@ def render_tools_tab() -> None:
                 st.info(f"Faltan ganadores previos para {len(result['missing_sources'])} partidos.")
         except Exception as exc:
             st.error(f"No se pudieron actualizar las siguientes rondas: {exc}")
-    if tool_cols[2].button("Recalcular standings + cuadro real + puntos", width="stretch"):
+    if tool_cols[2].button(
+        "Recalcular standings + cuadro real + puntos",
+        key="tools_recalculate_full_tournament_flow",
+        width="stretch",
+    ):
         try:
             recalculate_real_group_standings()
             update_real_round_of_32_from_group_standings()
@@ -628,7 +661,7 @@ def render_tools_tab() -> None:
     st.divider()
     st.subheader("Provider")
     provider_name = st.selectbox("Provider", ["manual", "mock", "api-football"])
-    if st.button("Ejecutar provider seleccionado", width="stretch"):
+    if st.button("Ejecutar provider seleccionado", key="provider_run_selected", width="stretch"):
         try:
             result = get_provider(provider_name).sync()
             st.json(result)
