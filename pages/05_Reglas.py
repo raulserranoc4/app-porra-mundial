@@ -37,6 +37,7 @@ if not lock_loaded:
 
 st.header("🏆 Premios")
 st.write("La aportación para participar en la porra es de **10€ por persona**.")
+st.caption("Se aplicará una comisión de gestión de **1€ por participante**.")
 st.write("Al finalizar el Mundial, el bote total se repartirá entre tres participantes:")
 
 prize_cols = st.columns(3)
