@@ -135,6 +135,13 @@ def calculate_match_prediction_points(
     flags = {key: False for key in MATCH_FLAG_KEYS}
     knockout = _is_knockout(match)
     score_points_allowed = True
+    match_status = str(match.get("status") or "").strip().lower()
+
+    # Marcadores provisionales o valores 0-0 guardados en partidos programados
+    # nunca deben considerarse resultados reales.
+    if match_status and match_status != "finished":
+        score_points_allowed = False
+        reasons.append("Partido todavía no finalizado: no puntúa marcador.")
 
     if knockout:
         predicted_home_team_id = prediction.get("predicted_home_team_id")

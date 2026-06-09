@@ -43,6 +43,22 @@ class ScoringTests(unittest.TestCase):
         self.assertTrue(details["correct_result"])
         self.assertTrue(details["correct_goal_difference"])
 
+    def test_scheduled_match_with_scores_does_not_score(self):
+        points, reasons, details = calculate_match_prediction_points(
+            {"predicted_home_score": 0, "predicted_away_score": 0},
+            {
+                "home_score": 0,
+                "away_score": 0,
+                "stage": "group",
+                "status": "scheduled",
+            },
+        )
+
+        self.assertEqual(points, 0)
+        self.assertTrue(any("no finalizado" in reason for reason in reasons))
+        self.assertFalse(details["exact_score"])
+        self.assertFalse(details["correct_result"])
+
     def test_knockout_matching_snapshot_scores_normally(self):
         points, _reasons, details = calculate_match_prediction_points(
             {
