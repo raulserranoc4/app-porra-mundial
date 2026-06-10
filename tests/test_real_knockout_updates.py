@@ -1,5 +1,6 @@
 import unittest
 
+from bracket import KNOCKOUT_BRACKET_STRUCTURE
 from real_tournament import (
     build_real_knockout_next_round_updates,
     build_real_round_of_32_match_updates,
@@ -48,6 +49,39 @@ def finished_match(home, away, advancing):
 
 
 class RealKnockoutUpdateTests(unittest.TestCase):
+    def test_knockout_structure_matches_official_2026_tree(self):
+        self.assertEqual(
+            KNOCKOUT_BRACKET_STRUCTURE,
+            {
+                "round_of_16": {
+                    89: (("winner", 74), ("winner", 77)),
+                    90: (("winner", 73), ("winner", 75)),
+                    91: (("winner", 76), ("winner", 78)),
+                    92: (("winner", 79), ("winner", 80)),
+                    93: (("winner", 83), ("winner", 84)),
+                    94: (("winner", 81), ("winner", 82)),
+                    95: (("winner", 86), ("winner", 88)),
+                    96: (("winner", 85), ("winner", 87)),
+                },
+                "quarter_final": {
+                    97: (("winner", 89), ("winner", 90)),
+                    98: (("winner", 93), ("winner", 94)),
+                    99: (("winner", 91), ("winner", 92)),
+                    100: (("winner", 95), ("winner", 96)),
+                },
+                "semi_final": {
+                    101: (("winner", 97), ("winner", 98)),
+                    102: (("winner", 99), ("winner", 100)),
+                },
+                "third_place": {
+                    103: (("loser", 101), ("loser", 102)),
+                },
+                "final": {
+                    104: (("winner", 101), ("winner", 102)),
+                },
+            },
+        )
+
     def test_round_of_32_uses_official_third_place_json(self):
         key, updates = build_real_round_of_32_match_updates(standings_tables_for_thirds("DEFGIJKL"))
 
@@ -55,16 +89,41 @@ class RealKnockoutUpdateTests(unittest.TestCase):
         self.assertEqual(updates[73], ("A2", "B2"))
         self.assertEqual(updates[74], ("E1", "D3"))
 
-    def test_winners_of_73_and_74_fill_match_89(self):
+    def test_round_of_16_uses_official_bracket_sources(self):
         updates, missing = build_real_knockout_next_round_updates(
             {
                 73: finished_match("A2", "B2", "A2"),
                 74: finished_match("E1", "D3", "D3"),
+                75: finished_match("F1", "C2", "F1"),
+                77: finished_match("I1", "A3", "I1"),
             }
         )
 
-        self.assertEqual(updates[89], ("A2", "D3"))
-        self.assertIn(90, missing)
+        self.assertEqual(updates[89], ("D3", "I1"))
+        self.assertEqual(updates[90], ("A2", "F1"))
+        self.assertNotIn(89, missing)
+        self.assertNotIn(90, missing)
+
+    def test_quarter_finals_use_official_bracket_sources(self):
+        updates, missing = build_real_knockout_next_round_updates(
+            {
+                89: finished_match("A", "B", "A"),
+                90: finished_match("C", "D", "C"),
+                91: finished_match("E", "F", "E"),
+                92: finished_match("G", "H", "G"),
+                93: finished_match("I", "J", "I"),
+                94: finished_match("K", "L", "K"),
+                95: finished_match("M", "N", "M"),
+                96: finished_match("O", "P", "O"),
+            }
+        )
+
+        self.assertEqual(updates[97], ("A", "C"))
+        self.assertEqual(updates[98], ("I", "K"))
+        self.assertEqual(updates[99], ("E", "G"))
+        self.assertEqual(updates[100], ("M", "O"))
+        self.assertNotIn(97, missing)
+        self.assertNotIn(100, missing)
 
     def test_semifinal_winners_fill_final_and_losers_fill_third_place(self):
         updates, _missing = build_real_knockout_next_round_updates(

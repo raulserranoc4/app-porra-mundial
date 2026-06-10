@@ -387,33 +387,34 @@ class BracketTests(unittest.TestCase):
             predictions[match_number] = {
                 "predicted_advancing_team_id": "H73",
             }
-        predictions[89] = {"predicted_advancing_team_id": "H73"}
-        predictions[90] = {"predicted_advancing_team_id": "H75"}
-        predictions[91] = {"predicted_advancing_team_id": "H77"}
+        predictions[89] = {"predicted_advancing_team_id": "H74"}
+        predictions[90] = {"predicted_advancing_team_id": "H73"}
+        predictions[91] = {"predicted_advancing_team_id": "H76"}
         predictions[92] = {"predicted_advancing_team_id": "H79"}
-        predictions[93] = {"predicted_advancing_team_id": "H81"}
-        predictions[94] = {"predicted_advancing_team_id": "H83"}
-        predictions[95] = {"predicted_advancing_team_id": "H85"}
-        predictions[96] = {"predicted_advancing_team_id": "H87"}
-        predictions[97] = {"predicted_advancing_team_id": "H73"}
-        predictions[98] = {"predicted_advancing_team_id": "H77"}
-        predictions[99] = {"predicted_advancing_team_id": "H81"}
-        predictions[100] = {"predicted_advancing_team_id": "H85"}
-        predictions[101] = {"predicted_advancing_team_id": "H73"}
-        predictions[102] = {"predicted_advancing_team_id": "H81"}
+        predictions[93] = {"predicted_advancing_team_id": "H83"}
+        predictions[94] = {"predicted_advancing_team_id": "H81"}
+        predictions[95] = {"predicted_advancing_team_id": "H86"}
+        predictions[96] = {"predicted_advancing_team_id": "H85"}
+        predictions[97] = {"predicted_advancing_team_id": "H74"}
+        predictions[98] = {"predicted_advancing_team_id": "H83"}
+        predictions[99] = {"predicted_advancing_team_id": "H76"}
+        predictions[100] = {"predicted_advancing_team_id": "H86"}
+        predictions[101] = {"predicted_advancing_team_id": "H74"}
+        predictions[102] = {"predicted_advancing_team_id": "H76"}
 
         bracket = build_projected_knockout_from_round_of_32(
             projected_round_of_32(),
             predictions,
         )
 
-        self.assertEqual(bracket["round_of_16"][0]["home_team_id"], "H73")
-        self.assertEqual(bracket["quarter_final"][0]["home_team_id"], "H73")
-        self.assertEqual(bracket["semi_final"][0]["home_team_id"], "H73")
-        self.assertEqual(bracket["final"][0]["home_team_id"], "H73")
-        self.assertEqual(bracket["final"][0]["away_team_id"], "H81")
-        self.assertEqual(bracket["third_place"][0]["home_team_id"], "H77")
-        self.assertEqual(bracket["third_place"][0]["away_team_id"], "H85")
+        self.assertEqual(bracket["round_of_16"][0]["home_team_id"], "H74")
+        self.assertEqual(bracket["round_of_16"][0]["away_team_id"], "H77")
+        self.assertEqual(bracket["quarter_final"][0]["home_team_id"], "H74")
+        self.assertEqual(bracket["semi_final"][0]["home_team_id"], "H74")
+        self.assertEqual(bracket["final"][0]["home_team_id"], "H74")
+        self.assertEqual(bracket["final"][0]["away_team_id"], "H76")
+        self.assertEqual(bracket["third_place"][0]["home_team_id"], "H83")
+        self.assertEqual(bracket["third_place"][0]["away_team_id"], "H86")
 
     def test_later_round_is_unavailable_without_previous_winner(self):
         bracket = build_projected_knockout_from_round_of_32(
@@ -423,7 +424,8 @@ class BracketTests(unittest.TestCase):
 
         first_round_of_16 = bracket["round_of_16"][0]
         self.assertFalse(first_round_of_16["is_available"])
-        self.assertIn("Ganador partido 73", first_round_of_16["missing_reason"])
+        self.assertIn("Ganador partido 74", first_round_of_16["missing_reason"])
+        self.assertIn("Ganador partido 77", first_round_of_16["missing_reason"])
 
 
 if __name__ == "__main__":

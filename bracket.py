@@ -36,21 +36,22 @@ ROUND_OF_32_SLOTS = {
     87: ("1K", "third:1K"),
     88: ("2D", "2G"),
 }
+# Official FIFA World Cup 2026 path from the round of 32 to the final.
 KNOCKOUT_BRACKET_STRUCTURE = {
     "round_of_16": {
-        89: (("winner", 73), ("winner", 74)),
-        90: (("winner", 75), ("winner", 76)),
-        91: (("winner", 77), ("winner", 78)),
+        89: (("winner", 74), ("winner", 77)),
+        90: (("winner", 73), ("winner", 75)),
+        91: (("winner", 76), ("winner", 78)),
         92: (("winner", 79), ("winner", 80)),
-        93: (("winner", 81), ("winner", 82)),
-        94: (("winner", 83), ("winner", 84)),
-        95: (("winner", 85), ("winner", 86)),
-        96: (("winner", 87), ("winner", 88)),
+        93: (("winner", 83), ("winner", 84)),
+        94: (("winner", 81), ("winner", 82)),
+        95: (("winner", 86), ("winner", 88)),
+        96: (("winner", 85), ("winner", 87)),
     },
     "quarter_final": {
         97: (("winner", 89), ("winner", 90)),
-        98: (("winner", 91), ("winner", 92)),
-        99: (("winner", 93), ("winner", 94)),
+        98: (("winner", 93), ("winner", 94)),
+        99: (("winner", 91), ("winner", 92)),
         100: (("winner", 95), ("winner", 96)),
     },
     "semi_final": {
