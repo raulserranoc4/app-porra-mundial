@@ -84,6 +84,45 @@ def inject_app_css() -> None:
             border: 1px solid #ded6c5; background: #fffdf8;
             border-radius: 8px; padding: 14px 16px; margin: 8px 0;
         }
+        .home-hero {
+            background: #172b20; border-radius: 14px; color: #f7f2e8;
+            margin-bottom: 14px; overflow: hidden; padding: 28px 30px;
+            position: relative;
+        }
+        .home-hero::after {
+            background: #d9b95b; border-radius: 999px; content: "";
+            height: 150px; opacity: .16; position: absolute; right: -34px;
+            top: -70px; width: 150px;
+        }
+        .home-hero h1 {
+            color: #fffaf0; font-size: clamp(2rem, 5vw, 3.5rem);
+            letter-spacing: -.04em; margin: 5px 0 8px;
+        }
+        .home-hero p { color: #dce5dd; margin: 0; max-width: 650px; }
+        .home-kicker {
+            color: #e3c66d; font-size: .74rem; font-weight: 850;
+            letter-spacing: .13em;
+        }
+        .home-match-card {
+            background: #fffdf8; border: 1px solid #ded6c5;
+            border-radius: 10px; margin: 14px 0 7px; padding: 16px 18px;
+        }
+        .home-match-top {
+            align-items: flex-start; display: flex; gap: 16px;
+            justify-content: space-between;
+        }
+        .home-match-number {
+            color: #7c745f; font-size: .68rem; font-weight: 850;
+            letter-spacing: .1em; margin-bottom: 6px;
+        }
+        .home-match-title { font-size: 1.08rem; font-weight: 820; }
+        .home-match-vs { color: #8a867c; font-size: .78rem; margin: 0 7px; }
+        .home-match-meta { color: #62675f; font-size: .8rem; margin-top: 7px; }
+        .home-match-result {
+            align-items: flex-end; display: flex; flex-direction: column; gap: 7px;
+            white-space: nowrap;
+        }
+        .home-match-result strong { color: #1d3928; font-size: 1.05rem; }
         .team-label { display: inline-flex; align-items: center; gap: 6px; }
         .team-label span:last-child { overflow-wrap: anywhere; }
         .flag { font-size: 1.1rem; line-height: 1; }
@@ -207,6 +246,9 @@ def inject_app_css() -> None:
             .match-head, .result-card-layout {
                 align-items: flex-start !important; flex-direction: column;
             }
+            .home-hero { border-radius: 10px; padding: 21px 18px; }
+            .home-match-top { flex-direction: column; }
+            .home-match-result { align-items: flex-start; }
             .match-title { font-size: .96rem !important; line-height: 1.5; }
             .match-meta { gap: 5px !important; }
             .pill { white-space: normal !important; }
