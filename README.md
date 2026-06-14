@@ -343,6 +343,13 @@ python recalculate_scores.py --specials
 Estas operaciones eliminan únicamente eventos recalculables de `score_events`.
 No borran tablas ni apuestas.
 
+## Mi Resumen
+
+La página `Mi Resumen` permite a cada usuario consultar únicamente su propia
+puntuación por partido una vez que el resultado está finalizado y cargado.
+Incluye el resultado real, la apuesta realizada, los puntos obtenidos, el
+motivo del cálculo, filtros por fase, grupo y equipo, además de descarga CSV.
+
 ## Administración
 
 La página `Admin` permite:

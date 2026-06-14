@@ -209,6 +209,8 @@ def inject_app_css() -> None:
         .mobile-list-title { font-size: .95rem; font-weight: 780; }
         .mobile-list-meta { color: #62675f; font-size: .82rem; line-height: 1.45; }
         .mobile-list-points { color: #1b472b; font-size: 1rem; font-weight: 850; }
+        .summary-points-positive { color: #18733a; }
+        .summary-points-zero { color: #74746d; }
         @media (max-width: 768px) {
             .block-container {
                 padding-left: .75rem !important; padding-right: .75rem !important;

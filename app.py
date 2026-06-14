@@ -203,6 +203,7 @@ navigation = st.navigation(
         st.Page(home_view, title="Inicio", default=True),
         st.Page("pages/05_Reglas.py", title="Reglas"),
         st.Page("pages/01_Apuestas.py", title="Mis Apuestas"),
+        st.Page("pages/06_Mi_Resumen.py", title="Mi Resumen"),
         st.Page("pages/02_Clasificacion.py", title="Clasificación"),
         st.Page("pages/03_Resultados.py", title="Resultados"),
         st.Page("pages/04_Admin.py", title="Admin"),
