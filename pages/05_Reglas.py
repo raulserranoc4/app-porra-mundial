@@ -44,17 +44,17 @@ prize_cols = st.columns(3)
 with prize_cols[0]:
     with st.container(border=True):
         st.subheader("🥇 1º Clasificado")
-        st.metric("Premio principal", "70%")
+        st.metric("Premio principal", "145€")
         st.write("El jugador con más puntos al finalizar el torneo recibirá el premio principal.")
 with prize_cols[1]:
     with st.container(border=True):
         st.subheader("🥈 2º Clasificado")
-        st.metric("Premio secundario", "20%")
+        st.metric("Premio secundario", "41€")
         st.write("El segundo clasificado recibirá un premio secundario.")
 with prize_cols[2]:
     with st.container(border=True):
         st.subheader("🥉 Último Clasificado")
-        st.metric("Premio consolación", "10%")
+        st.metric("Premio consolación", "21€")
         st.write("El último clasificado también recibirá un premio especial de consolación.")
 
 st.info(
