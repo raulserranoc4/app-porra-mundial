@@ -261,7 +261,12 @@ El marcador apostado corresponde siempre a los 90 minutos:
 
 | Acierto | Puntos |
 | --- | ---: |
-| Equipo que avanza | +3 |
+| Equipo que avanza en dieciseisavos | +3 |
+| Equipo que avanza en octavos | +5 |
+| Equipo que avanza en cuartos | +7 |
+| Equipo que avanza en semifinales | +11 |
+| Tercer puesto correcto | +15 |
+| Campeón correcto en la final | +20 |
 | Partido decidido por penales | +2 |
 
 Si el marcador no es empate, solo puede avanzar el ganador del marcador. Los
@@ -272,15 +277,15 @@ solo se conceden si los dos equipos del cruce apostado coinciden con los del
 cruce real. Si los mismos equipos juegan con local y visitante invertidos, el
 marcador apostado se adapta antes de calcular los puntos.
 
-El equipo que avanza se puntua por separado: suma +3 si ese equipo pasa la
-misma ronda real, aunque finalmente jugara contra otro rival o en otro
-`match_number`. Un mismo equipo solo puede conceder esos +3 una vez por jugador
-y ronda.
+El equipo que avanza se puntua por separado: suma los puntos de esa ronda si
+ese equipo pasa la misma ronda real, aunque finalmente jugara contra otro rival
+o en otro `match_number`. Un mismo equipo solo puede conceder puntos de avance
+una vez por jugador y ronda.
 
 Las apuestas eliminatorias nuevas guardan un snapshot de ambos equipos. Las
 apuestas antiguas sin snapshot no puntuan por marcador ni penales por defecto,
-pero sí pueden sumar +3 por acertar el equipo que pasa la ronda. El modo legacy
-para puntuar su marcador solo puede activarse explicitamente con
+pero sí pueden sumar los puntos de avance de la ronda por acertar el equipo que
+pasa. El modo legacy para puntuar su marcador solo puede activarse explicitamente con
 `ALLOW_LEGACY_KNOCKOUT_SCORING=true`.
 
 Tras aplicar las columnas de snapshot, puedes rellenar de forma segura las

@@ -40,6 +40,15 @@ KNOCKOUT_STAGE_MATCH_NUMBERS = {
     "final": (104,),
 }
 
+KNOCKOUT_ADVANCEMENT_POINTS = {
+    "round_of_32": 3,
+    "round_of_16": 5,
+    "quarter_final": 7,
+    "semi_final": 11,
+    "third_place": 15,
+    "final": 20,
+}
+
 
 def get_knockout_stage_match_numbers(stage: str) -> tuple[int, ...]:
     normalized_stage = str(stage or "").strip().lower()
@@ -58,6 +67,10 @@ def _knockout_stage_for_match(match: dict) -> str:
             if int(match_number) in match_numbers:
                 return stage_name
     raise ValueError(f"No se pudo determinar la ronda eliminatoria del partido {match.get('id')!r}.")
+
+
+def _knockout_advancement_points(match: dict) -> int:
+    return KNOCKOUT_ADVANCEMENT_POINTS[_knockout_stage_for_match(match)]
 
 
 def _result(home: int | None, away: int | None) -> str | None:
@@ -224,8 +237,9 @@ def calculate_match_prediction_points(
             and _has_penalties(match)
         )
         if flags["correct_advancing_team"]:
-            points += 3
-            reasons.append("Equipo clasificado a la siguiente ronda correcto (+3).")
+            advancement_points = _knockout_advancement_points(match)
+            points += advancement_points
+            reasons.append(f"Equipo clasificado a la siguiente ronda correcto (+{advancement_points}).")
         elif predicted_advancing_team_id and advanced_team_in_stage is not None and not team_advanced:
             reasons.append("El equipo elegido no avanzó en esta ronda.")
         elif predicted_advancing_team_id and team_advanced and not advancement_points_allowed:

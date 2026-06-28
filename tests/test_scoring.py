@@ -249,6 +249,33 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(points, 10)
         self.assertTrue(details["knockout_matchup_reversed"])
 
+    def test_final_advancing_team_scores_twenty(self):
+        points, reasons, details = calculate_match_prediction_points(
+            {
+                "predicted_home_score": 2,
+                "predicted_away_score": 1,
+                "predicted_home_team_id": "BRA",
+                "predicted_away_team_id": "ESP",
+                "predicted_advancing_team_id": "BRA",
+            },
+            {
+                "home_score": 2,
+                "away_score": 1,
+                "home_team_id": "BRA",
+                "away_team_id": "ESP",
+                "advancing_team_id": "BRA",
+                "stage": "final",
+            },
+            advanced_team_in_stage=True,
+            advancement_points_allowed=True,
+            advancement_scored_by_stage=True,
+        )
+
+        self.assertEqual(points, 27)
+        self.assertTrue(details["exact_score"])
+        self.assertTrue(details["correct_advancing_team"])
+        self.assertTrue(any("+20" in reason for reason in reasons))
+
     def test_knockout_different_matchup_and_team_not_advanced_scores_zero(self):
         points, reasons, details = calculate_match_prediction_points(
             {

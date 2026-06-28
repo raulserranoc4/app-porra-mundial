@@ -84,7 +84,12 @@ st.header("🏆 Eliminatorias")
 st.write("El marcador apostado siempre cuenta a **90 minutos**, sin incluir prórroga ni penales.")
 points_table(
     [
-        ("Equipo que avanza correcto", "+3 puntos"),
+        ("Equipo que avanza en dieciseisavos", "+3 puntos"),
+        ("Equipo que avanza en octavos", "+5 puntos"),
+        ("Equipo que avanza en cuartos", "+7 puntos"),
+        ("Equipo que avanza en semifinales", "+11 puntos"),
+        ("Tercer puesto correcto", "+15 puntos"),
+        ("Campeón correcto en la final", "+20 puntos"),
         ("Apostar penales cuando efectivamente los hay", "+2 puntos"),
     ]
 )
@@ -96,7 +101,7 @@ st.warning(
     "En eliminatorias, el marcador y los penales solo puntúan si los dos equipos "
     "del cruce apostado coinciden con los del cruce real. Si juegan los mismos equipos "
     "con local y visitante invertidos, la app adapta el marcador. El equipo que avanza "
-    "se puntúa por separado: suma +3 si pasa esa ronda, aunque jugara contra otro rival."
+    "se puntúa por separado con el valor de su ronda, aunque jugara contra otro rival."
 )
 
 st.header("📋 Apuestas de grupos")
@@ -136,7 +141,12 @@ summary = pd.DataFrame(
         ("Partidos", "Diferencia correcta", "+2"),
         ("Partidos", "Goles local correctos", "+1"),
         ("Partidos", "Goles visitante correctos", "+1"),
-        ("Eliminatorias", "Equipo que avanza", "+3"),
+        ("Eliminatorias", "Avanza en dieciseisavos", "+3"),
+        ("Eliminatorias", "Avanza en octavos", "+5"),
+        ("Eliminatorias", "Avanza en cuartos", "+7"),
+        ("Eliminatorias", "Avanza en semifinales", "+11"),
+        ("Eliminatorias", "Tercer puesto", "+15"),
+        ("Eliminatorias", "Campeón en la final", "+20"),
         ("Eliminatorias", "Penales acertados", "+2"),
         ("Grupos", "Equipo clasificado", "3"),
         ("Grupos", "Posición exacta", "+2"),
@@ -168,7 +178,7 @@ with st.container(border=True):
     st.subheader("Ejemplo 3: eliminatoria con penales")
     st.write("**Pronóstico:** 🇪🇸 España 1-1 🇺🇾 Uruguay, avanza España")
     st.write("**Resultado a 90 minutos:** 🇪🇸 España 1-1 🇺🇾 Uruguay, avanza España en penales")
-    st.info("Puntos: 7 por marcador exacto + 3 por equipo que avanza. Si además apostaste penales, +2.")
+    st.info("Puntos: 7 por marcador exacto + los puntos de avance de esa ronda. Si además apostaste penales, +2.")
 
 st.header("📈 Clasificación")
 st.write(
