@@ -454,8 +454,8 @@ def calculate_group_prediction_points(projected_rows: list[dict], actual_positio
         reasons.append(f"Posiciones exactas (+{exact_position_count * 2}).")
     return points, reasons or ["Sin puntos."], {
         "group_letter": projected_rows[0].get("group_letter") if projected_rows else None,
-        "predicted_positions": predicted_positions,
-        "actual_positions": actual_positions,
+        "predicted_positions": {str(team_id): position for team_id, position in predicted_positions.items()},
+        "actual_positions": {str(team_id): position for team_id, position in actual_positions.items()},
         "qualified_correct_count": qualified_correct_count,
         "exact_position_count": exact_position_count,
     }

@@ -1,10 +1,13 @@
 import unittest
+from contextlib import contextmanager
+from unittest.mock import Mock, patch
 
 from bracket import KNOCKOUT_BRACKET_STRUCTURE
 from real_tournament import (
     build_real_knockout_next_round_updates,
     build_real_round_of_32_match_updates,
     build_tournament_results_payload_from_matches,
+    update_real_round_of_32_from_group_standings,
 )
 
 
@@ -88,6 +91,40 @@ class RealKnockoutUpdateTests(unittest.TestCase):
         self.assertEqual(key, "DEFGIJKL")
         self.assertEqual(updates[73], ("A2", "B2"))
         self.assertEqual(updates[74], ("E1", "D3"))
+
+    def test_round_of_32_update_recalculates_standings_before_building_matches(self):
+        calls = []
+        conn = Mock()
+
+        @contextmanager
+        def fake_session():
+            yield conn
+
+        def recalculate(_conn):
+            calls.append("recalculate")
+            return {"updated": 48, "groups": 12}
+
+        def load_tables(_conn):
+            calls.append("load_tables")
+            return standings_tables_for_thirds("DEFGIJKL")
+
+        with (
+            patch("real_tournament.db_session", fake_session),
+            patch("real_tournament._missing_finished_group_matches", return_value=0),
+            patch("real_tournament._recalculate_real_group_standings", side_effect=recalculate),
+            patch("real_tournament._group_standings_tables", side_effect=load_tables),
+            patch(
+                "real_tournament.build_real_round_of_32_match_updates",
+                return_value=("DEFGIJKL", {73: ("A2", "B2")}),
+            ),
+            patch("real_tournament.update_dynamic") as update_dynamic,
+        ):
+            result = update_real_round_of_32_from_group_standings()
+
+        self.assertEqual(calls, ["recalculate", "load_tables"])
+        self.assertEqual(result["standings_updated"], 48)
+        self.assertEqual(result["standings_groups"], 12)
+        update_dynamic.assert_called_once()
 
     def test_round_of_16_uses_official_bracket_sources(self):
         updates, missing = build_real_knockout_next_round_updates(

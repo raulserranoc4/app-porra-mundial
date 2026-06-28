@@ -1,6 +1,7 @@
 import json
 import os
 import unittest
+from uuid import uuid4
 from unittest.mock import patch
 
 import pandas as pd
@@ -422,6 +423,25 @@ class ScoringTests(unittest.TestCase):
         self.assertEqual(details["exact_position_count"], 2)
         self.assertEqual(details["predicted_positions"]["ESP"], 1)
         self.assertEqual(details["actual_positions"]["ESP"], 2)
+
+    def test_derived_group_scoring_details_are_json_serializable_with_uuid_team_ids(self):
+        first_team_id = uuid4()
+        second_team_id = uuid4()
+
+        points, _reasons, details = calculate_group_prediction_points(
+            [
+                {"team_id": first_team_id, "group_letter": "A", "position": 1},
+                {"team_id": second_team_id, "group_letter": "A", "position": 2},
+            ],
+            {
+                first_team_id: 1,
+                second_team_id: 2,
+            },
+        )
+
+        self.assertEqual(points, 10)
+        json.dumps(details)
+        self.assertEqual(details["predicted_positions"][str(first_team_id)], 1)
 
     def test_derived_group_scoring_requires_six_completed_matches(self):
         rows = [

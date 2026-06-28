@@ -293,36 +293,50 @@ def _upsert_group_standing(conn, row: dict) -> None:
     )
 
 
+def _load_group_match_rows(conn) -> list[dict]:
+    rows = conn.execute(
+        text(
+            """
+            SELECT
+                m.match_number,
+                m.group_letter,
+                m.status,
+                m.home_team_id,
+                m.away_team_id,
+                ht.name AS home_team_name,
+                at.name AS away_team_name,
+                m.home_score,
+                m.away_score
+            FROM matches m
+            LEFT JOIN teams ht ON ht.id = m.home_team_id
+            LEFT JOIN teams at ON at.id = m.away_team_id
+            WHERE m.stage = 'group'
+            ORDER BY m.group_letter, m.match_number, m.id
+            """
+        )
+    ).mappings().all()
+    return [dict(row) for row in rows]
+
+
+def _recalculate_real_group_standings(conn) -> dict[str, Any]:
+    tables = calculate_real_group_standings_from_matches(_load_group_match_rows(conn))
+    groups = sorted(tables)
+    if groups:
+        conn.execute(
+            text("DELETE FROM group_standings WHERE group_letter = ANY(:groups)"),
+            {"groups": groups},
+        )
+    updated = 0
+    for group_rows in tables.values():
+        for row in group_rows:
+            _upsert_group_standing(conn, row)
+            updated += 1
+    return {"updated": updated, "groups": len(tables)}
+
+
 def recalculate_real_group_standings() -> dict[str, Any]:
     with db_session() as conn:
-        rows = conn.execute(
-            text(
-                """
-                SELECT
-                    m.match_number,
-                    m.group_letter,
-                    m.status,
-                    m.home_team_id,
-                    m.away_team_id,
-                    ht.name AS home_team_name,
-                    at.name AS away_team_name,
-                    m.home_score,
-                    m.away_score
-                FROM matches m
-                LEFT JOIN teams ht ON ht.id = m.home_team_id
-                LEFT JOIN teams at ON at.id = m.away_team_id
-                WHERE m.stage = 'group'
-                ORDER BY m.group_letter, m.match_number, m.id
-                """
-            )
-        ).mappings().all()
-        tables = calculate_real_group_standings_from_matches([dict(row) for row in rows])
-        updated = 0
-        for group_rows in tables.values():
-            for row in group_rows:
-                _upsert_group_standing(conn, row)
-                updated += 1
-    return {"updated": updated, "groups": len(tables)}
+        return _recalculate_real_group_standings(conn)
 
 
 def _group_standings_tables(conn) -> dict[str, list[dict]]:
@@ -389,6 +403,7 @@ def update_real_round_of_32_from_group_standings() -> dict[str, Any]:
         missing = _missing_finished_group_matches(conn)
         if missing:
             raise RealTournamentError(f"Faltan {missing} partidos de fase de grupos por finalizar.")
+        standings_result = _recalculate_real_group_standings(conn)
         tables = _group_standings_tables(conn)
         if len(tables) < 12 or any(len(rows) < 4 for rows in tables.values()):
             raise RealTournamentError("Las clasificaciones de grupos no estan completas.")
@@ -408,7 +423,12 @@ def update_real_round_of_32_from_group_standings() -> dict[str, Any]:
                 {"match_number": match_number},
             )
             updated += 1
-    return {"updated": updated, "third_place_key": third_place_key}
+    return {
+        "updated": updated,
+        "third_place_key": third_place_key,
+        "standings_updated": standings_result["updated"],
+        "standings_groups": standings_result["groups"],
+    }
 
 
 def _matches_by_number(conn, start: int = 73, end: int = 104) -> dict[int, dict]:

@@ -470,24 +470,23 @@ def render_group_standings_tab() -> None:
         st.error(f"No se pudo cargar group_standings: {exc}")
         return
 
+    action_cols = st.columns(2)
     if standings.empty:
         st.info("No hay clasificacion de grupos.")
-        return
-
-    with st.expander("Editar tabla de grupos", expanded=False):
-        edited = st.data_editor(standings, width="stretch", num_rows="fixed", key="group_standings_editor")
-    action_cols = st.columns(2)
-    if action_cols[0].button("Guardar group_standings", key="groups_save_standings", width="stretch"):
-        try:
-            with db_session() as conn:
-                for row in edited.to_dict("records"):
-                    if pd.isna(row.get("id")):
-                        continue
-                    payload = {key: clean_value(value) for key, value in row.items() if key != "team_name"}
-                    update_dynamic(conn, "group_standings", payload, "id = :id", {"id": row["id"]})
-            st.success("Group standings guardado.")
-        except Exception as exc:
-            st.error(f"No se pudo guardar group_standings: {exc}")
+    else:
+        with st.expander("Editar tabla de grupos", expanded=False):
+            edited = st.data_editor(standings, width="stretch", num_rows="fixed", key="group_standings_editor")
+        if action_cols[0].button("Guardar group_standings", key="groups_save_standings", width="stretch"):
+            try:
+                with db_session() as conn:
+                    for row in edited.to_dict("records"):
+                        if pd.isna(row.get("id")):
+                            continue
+                        payload = {key: clean_value(value) for key, value in row.items() if key != "team_name"}
+                        update_dynamic(conn, "group_standings", payload, "id = :id", {"id": row["id"]})
+                st.success("Group standings guardado.")
+            except Exception as exc:
+                st.error(f"No se pudo guardar group_standings: {exc}")
 
     if action_cols[1].button("Recalcular puntos de grupos", key="groups_recalculate_scores", width="stretch"):
         try:
@@ -576,7 +575,11 @@ def render_tools_tab() -> None:
     ):
         try:
             result = update_real_round_of_32_from_group_standings()
-            st.success(f"Dieciseisavos actualizados: {result['updated']} partidos. Clave terceros: {result['third_place_key']}.")
+            st.success(
+                "Clasificaciones recalculadas y dieciseisavos actualizados: "
+                f"{result['standings_updated']} filas en {result['standings_groups']} grupos, "
+                f"{result['updated']} partidos. Clave terceros: {result['third_place_key']}."
+            )
         except Exception as exc:
             st.error(f"No se pudieron actualizar los dieciseisavos reales: {exc}")
     if tool_cols[1].button(
