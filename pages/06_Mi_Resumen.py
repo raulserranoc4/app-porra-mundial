@@ -107,6 +107,49 @@ def load_player_match_summary(player_id):
     )
 
 
+def load_player_score_breakdown(player_id):
+    rows = fetch_df(
+        """
+        SELECT
+            COALESCE(SUM(points), 0)::integer AS total_points,
+            COALESCE(SUM(points) FILTER (WHERE category = 'match'), 0)::integer AS match_points,
+            COALESCE(SUM(points) FILTER (WHERE category = 'group'), 0)::integer AS group_points,
+            COALESCE(SUM(points) FILTER (WHERE category = 'special'), 0)::integer AS special_points,
+            COALESCE(SUM(points) FILTER (WHERE category = 'bonus'), 0)::integer AS bonus_points,
+            COALESCE(SUM(points) FILTER (WHERE category = 'manual_adjustment'), 0)::integer AS manual_adjustment_points
+        FROM score_events
+        WHERE player_id = :player_id
+        """,
+        {"player_id": player_id},
+    )
+    if rows.empty:
+        return {
+            "total_points": 0,
+            "match_points": 0,
+            "group_points": 0,
+            "special_points": 0,
+            "bonus_points": 0,
+            "manual_adjustment_points": 0,
+        }
+    return {key: int(rows.iloc[0].get(key) or 0) for key in rows.columns}
+
+
+def load_player_group_score_summary(player_id):
+    return fetch_df(
+        """
+        SELECT
+            reason_json ->> 'group_letter' AS group_letter,
+            points,
+            reason
+        FROM score_events
+        WHERE player_id = :player_id
+          AND category = 'group'
+        ORDER BY reason_json ->> 'group_letter', calculated_at
+        """,
+        {"player_id": player_id},
+    )
+
+
 def finished_match_count() -> int:
     rows = fetch_df(
         """
@@ -179,12 +222,14 @@ st.caption("Consulta los puntos obtenidos en cada partido finalizado.")
 
 try:
     summary = prepare_summary(load_player_match_summary(user["id"]))
+    score_breakdown = load_player_score_breakdown(user["id"])
+    group_score_summary = load_player_group_score_summary(user["id"])
     total_finished_matches = finished_match_count()
 except Exception as exc:
     st.error(f"No se pudo cargar tu resumen: {exc}")
     st.stop()
 
-if summary.empty:
+if summary.empty and score_breakdown["total_points"] == 0:
     if total_finished_matches == 0:
         st.info("Todavía no hay partidos finalizados.")
     else:
@@ -192,11 +237,42 @@ if summary.empty:
     st.stop()
 
 metric_cols = st.columns(5)
-metric_cols[0].metric("Puntos en partidos", int(summary["points"].sum()))
-metric_cols[1].metric("Partidos con apuesta", len(summary))
-metric_cols[2].metric("Marcadores exactos", int(summary["exact_score"].sum()))
-metric_cols[3].metric("Signos correctos", int(summary["correct_result"].sum()))
-metric_cols[4].metric("Equipos que avanzan", int(summary["correct_advancing_team"].sum()))
+metric_cols[0].metric("Total clasificación", score_breakdown["total_points"])
+metric_cols[1].metric("Partidos", score_breakdown["match_points"])
+metric_cols[2].metric("Grupos", score_breakdown["group_points"])
+metric_cols[3].metric("Especiales", score_breakdown["special_points"])
+metric_cols[4].metric("Otros", score_breakdown["bonus_points"] + score_breakdown["manual_adjustment_points"])
+
+if score_breakdown["group_points"] or score_breakdown["special_points"]:
+    st.caption(
+        "El total coincide con la clasificación general. La tabla inferior muestra solo el detalle partido a partido."
+    )
+
+if not group_score_summary.empty:
+    with st.expander("Ver puntos de clasificación de grupos", expanded=False):
+        display_group_scores = group_score_summary.rename(
+            columns={
+                "group_letter": "Grupo",
+                "points": "Puntos",
+                "reason": "Motivo",
+            }
+        )
+        st.dataframe(
+            display_group_scores[["Grupo", "Puntos", "Motivo"]],
+            width="stretch",
+            hide_index=True,
+            column_config={"Puntos": st.column_config.NumberColumn("Puntos", format="%d pts")},
+        )
+
+if summary.empty:
+    st.info("No tienes detalle de partidos finalizados, pero sí puntuación en otras categorías.")
+    st.stop()
+
+match_metric_cols = st.columns(4)
+match_metric_cols[0].metric("Partidos con apuesta", len(summary))
+match_metric_cols[1].metric("Marcadores exactos", int(summary["exact_score"].sum()))
+match_metric_cols[2].metric("Signos correctos", int(summary["correct_result"].sum()))
+match_metric_cols[3].metric("Equipos que avanzan", int(summary["correct_advancing_team"].sum()))
 
 filter_cols = st.columns(4)
 stage_options = ["Todas"] + sorted(summary["stage_label"].dropna().unique().tolist())

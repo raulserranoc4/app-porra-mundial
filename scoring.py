@@ -432,32 +432,12 @@ def calculate_group_prediction_points(projected_rows: list[dict], actual_positio
         for team_id, position in actual_positions.items()
         if position is not None
     }
-    qualified_correct_count = len(
-        {
-            team_id
-            for team_id, predicted_position in predicted_positions.items()
-            if predicted_position <= 2 and actual_positions.get(team_id, 99) <= 2
-        }
-    )
-    exact_position_count = len(
-        {
-            team_id
-            for team_id, predicted_position in predicted_positions.items()
-            if actual_positions.get(team_id) == predicted_position
-        }
-    )
-    points = qualified_correct_count * 3 + exact_position_count * 2
-    reasons = []
-    if qualified_correct_count:
-        reasons.append(f"Clasificados correctos (+{qualified_correct_count * 3}).")
-    if exact_position_count:
-        reasons.append(f"Posiciones exactas (+{exact_position_count * 2}).")
-    return points, reasons or ["Sin puntos."], {
+    return 0, ["Las clasificaciones de grupos no puntúan."], {
         "group_letter": projected_rows[0].get("group_letter") if projected_rows else None,
         "predicted_positions": {str(team_id): position for team_id, position in predicted_positions.items()},
         "actual_positions": {str(team_id): position for team_id, position in actual_positions.items()},
-        "qualified_correct_count": qualified_correct_count,
-        "exact_position_count": exact_position_count,
+        "qualified_correct_count": 0,
+        "exact_position_count": 0,
     }
 
 
@@ -544,44 +524,8 @@ def _insert_legacy_group_scores(conn, actual_rows: list[dict]) -> int:
 
 
 def recalculate_derived_group_scores() -> None:
-    actual = fetch_df("SELECT * FROM group_standings")
-    actual_rows = actual.to_dict("records")
-    actual_by_group = _actual_group_positions(actual_rows)
     with db_session() as conn:
         conn.execute(text("DELETE FROM score_events WHERE category = 'group'"))
-        player_rows = conn.execute(
-            text(
-                """
-                SELECT DISTINCT p.player_id
-                FROM predictions p
-                JOIN matches m ON m.id = p.match_id
-                WHERE m.stage = 'group'
-                """
-            )
-        ).mappings().all()
-        inserted = 0
-        for player_row in player_rows:
-            player_id = player_row["player_id"]
-            group_rows = get_player_group_predictions(conn, player_id)
-            completed_groups = _completed_group_letters(group_rows)
-            projected_tables = _calculate_projected_tables_for_scoring(group_rows, player_id)
-            for group_letter, projected_rows in projected_tables.items():
-                if group_letter not in completed_groups or group_letter not in actual_by_group:
-                    continue
-                points, reasons, details = calculate_group_prediction_points(projected_rows, actual_by_group[group_letter])
-                _insert_score_event(
-                    conn,
-                    {
-                        "player_id": player_id,
-                        "category": "group",
-                        "points": points,
-                        "reason": " ".join(reasons) or "Sin puntos.",
-                        "reason_json": details,
-                    },
-                )
-                inserted += 1
-        if inserted == 0:
-            _insert_legacy_group_scores(conn, actual_rows)
 
 
 def recalculate_group_scores() -> None:

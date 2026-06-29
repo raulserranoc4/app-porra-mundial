@@ -441,16 +441,16 @@ def render_matches_tab(team_names: list[str], team_ids: dict) -> None:
             except Exception as exc:
                 st.error(f"No se pudieron recalcular las clasificaciones: {exc}")
         if group_action_cols[1].button(
-            "Recalcular standings + puntos",
+            "Recalcular standings y limpiar puntos de grupos",
             key="matches_recalculate_group_standings_and_scores",
             width="stretch",
         ):
             try:
                 recalculate_real_group_standings()
                 recalculate_group_scores()
-                st.success("Standings reales y puntos de grupo recalculados.")
+                st.success("Standings reales recalculados y puntos de grupo eliminados.")
             except Exception as exc:
-                st.error(f"No se pudieron recalcular standings y puntos: {exc}")
+                st.error(f"No se pudieron recalcular standings y limpiar puntos de grupos: {exc}")
 
 
 def render_group_standings_tab() -> None:
@@ -488,12 +488,12 @@ def render_group_standings_tab() -> None:
             except Exception as exc:
                 st.error(f"No se pudo guardar group_standings: {exc}")
 
-    if action_cols[1].button("Recalcular puntos de grupos", key="groups_recalculate_scores", width="stretch"):
+    if action_cols[1].button("Limpiar puntos de grupos", key="groups_recalculate_scores", width="stretch"):
         try:
             recalculate_group_scores()
-            st.success("Puntos de grupos recalculados.")
+            st.success("Puntos de grupos eliminados.")
         except Exception as exc:
-            st.error(f"No se pudieron recalcular los puntos de grupos: {exc}")
+            st.error(f"No se pudieron eliminar los puntos de grupos: {exc}")
 
     if st.button(
         "Recalcular clasificaciones de grupos",

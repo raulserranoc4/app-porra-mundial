@@ -112,11 +112,13 @@ st.write(
 )
 points_table(
     [
-        ("Equipo clasificado correctamente", "3 puntos"),
-        ("Posición exacta", "+2 puntos"),
+        ("Clasificación de grupos", "0 puntos"),
     ]
 )
-st.write("La posición exacta añade 2 puntos a los 3 del acierto de clasificación cuando corresponde.")
+st.write(
+    "Las clasificaciones de grupos no dan puntos directos. Sirven para construir "
+    "tu cuadro de eliminatorias y, a partir de ahí, puntuar los aciertos de rondas posteriores."
+)
 
 st.header("⭐ Apuestas especiales")
 st.write(
@@ -148,8 +150,7 @@ summary = pd.DataFrame(
         ("Eliminatorias", "Tercer puesto", "+15"),
         ("Eliminatorias", "Campeón en la final", "+20"),
         ("Eliminatorias", "Penales acertados", "+2"),
-        ("Grupos", "Equipo clasificado", "3"),
-        ("Grupos", "Posición exacta", "+2"),
+        ("Grupos", "Clasificación proyectada", "0"),
         ("Especiales", "Campeón", "20"),
         ("Especiales", "Subcampeón", "12"),
         ("Especiales", "Semifinalista", "8 por equipo"),

@@ -406,7 +406,7 @@ class ScoringTests(unittest.TestCase):
         self.assertNotIn("prediction_id", captured["values"])
         self.assertEqual(json.loads(captured["values"]["reason_json"])["exact_score"], True)
 
-    def test_derived_group_scoring_compares_projected_positions(self):
+    def test_derived_group_scoring_does_not_award_points(self):
         points, _reasons, details = calculate_group_prediction_points(
             [
                 {"team_id": "ESP", "group_letter": "A", "position": 1},
@@ -417,10 +417,10 @@ class ScoringTests(unittest.TestCase):
             {"FRA": 1, "ESP": 2, "BRA": 3, "ARG": 4},
         )
 
-        self.assertEqual(points, 10)
+        self.assertEqual(points, 0)
         self.assertEqual(details["group_letter"], "A")
-        self.assertEqual(details["qualified_correct_count"], 2)
-        self.assertEqual(details["exact_position_count"], 2)
+        self.assertEqual(details["qualified_correct_count"], 0)
+        self.assertEqual(details["exact_position_count"], 0)
         self.assertEqual(details["predicted_positions"]["ESP"], 1)
         self.assertEqual(details["actual_positions"]["ESP"], 2)
 
@@ -439,7 +439,7 @@ class ScoringTests(unittest.TestCase):
             },
         )
 
-        self.assertEqual(points, 10)
+        self.assertEqual(points, 0)
         json.dumps(details)
         self.assertEqual(details["predicted_positions"][str(first_team_id)], 1)
 

@@ -304,8 +304,11 @@ El script no intenta adivinar ni modificar cruces eliminatorios antiguos.
 
 | Acierto | Puntos |
 | --- | ---: |
-| Equipo clasificado correctamente | 3 |
-| Posición exacta | +2 |
+| Clasificación proyectada | 0 |
+
+Las clasificaciones de grupos no puntuan directamente. Se derivan de los
+marcadores apostados y sirven para construir el cuadro de eliminatorias de cada
+jugador.
 
 ### Especiales
 
