@@ -406,6 +406,20 @@ class ScoringTests(unittest.TestCase):
         self.assertNotIn("prediction_id", captured["values"])
         self.assertEqual(json.loads(captured["values"]["reason_json"])["exact_score"], True)
 
+    def test_insert_score_event_ignores_group_category(self):
+        with patch("scoring.insert_dynamic") as insert_dynamic:
+            _insert_score_event(
+                object(),
+                {
+                    "player_id": 1,
+                    "category": "group",
+                    "points": 14,
+                    "reason_json": {"group_letter": "A"},
+                },
+            )
+
+        insert_dynamic.assert_not_called()
+
     def test_derived_group_scoring_does_not_award_points(self):
         points, _reasons, details = calculate_group_prediction_points(
             [

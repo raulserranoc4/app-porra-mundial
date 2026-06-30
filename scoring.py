@@ -252,6 +252,8 @@ def calculate_match_prediction_points(
 
 
 def _insert_score_event(conn, values: dict) -> None:
+    if values.get("category") == "group":
+        return
     payload = values | {"reason_json": json.dumps(values.get("reason_json", {}), default=str)}
     filtered = {key: value for key, value in payload.items() if key in table_columns("score_events")}
     if filtered:
@@ -478,49 +480,7 @@ def _calculate_projected_tables_for_scoring(group_rows: list[dict], player_id) -
 
 
 def _insert_legacy_group_scores(conn, actual_rows: list[dict]) -> int:
-    # Group predictions are legacy. Group standings in the current UI are derived from match predictions.
-    actual_by_team = {row["team_id"]: row for row in actual_rows}
-    predictions = conn.execute(text("SELECT * FROM group_predictions")).mappings().all()
-    inserted = 0
-    if not actual_by_team or not predictions:
-        return inserted
-
-    prediction_position_keys = [
-        "predicted_first_team_id",
-        "predicted_second_team_id",
-        "predicted_third_team_id",
-        "predicted_fourth_team_id",
-    ]
-    for row in predictions:
-        points = 0
-        reasons = []
-        details = []
-        for predicted_position, key in enumerate(prediction_position_keys, start=1):
-            team_id = row.get(key)
-            if not team_id or team_id not in actual_by_team:
-                continue
-            actual_row = actual_by_team[team_id]
-            actual_position = actual_row.get("position") or actual_row.get("rank")
-            if actual_position and int(actual_position) <= 2 and predicted_position <= 2:
-                points += 3
-                reasons.append("Clasificado correcto (+3).")
-            if actual_position and int(actual_position) == predicted_position:
-                points += 2
-                reasons.append("Posicion exacta (+2).")
-            details.append({"team_id": team_id, "predicted_position": predicted_position, "actual_position": actual_position})
-        _insert_score_event(
-            conn,
-            {
-                "player_id": row.get("player_id"),
-                "group_prediction_id": row.get("id"),
-                "category": "group",
-                "points": points,
-                "reason": " ".join(reasons) or "Sin puntos.",
-                "reason_json": {"teams": details},
-            },
-        )
-        inserted += 1
-    return inserted
+    return 0
 
 
 def recalculate_derived_group_scores() -> None:
